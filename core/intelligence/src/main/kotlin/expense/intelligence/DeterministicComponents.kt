@@ -8,22 +8,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
-class DeterministicBankIdentifier(
-    private val senders: List<RegisteredSender>,
-) : BankIdentifier {
-    override fun identify(message: SmsText): BankIdentification {
-        val trimmed = message.sender.trim()
-        if (trimmed.isEmpty()) return BankIdentification(emptyList(), unknown = true)
-        val hits = senders.filter { sender -> sender.senderIds.any { it.trim() == trimmed } }
-        if (hits.isEmpty()) return BankIdentification(emptyList(), unknown = true)
-        val confidence = if (hits.size == 1) 90 else 40
-        return BankIdentification(
-            candidates = hits.map { BankCandidate(it.institutionId, it.displayName, confidence) },
-            unknown = false,
-        )
-    }
-}
-
 class DeterministicTransactionClassifier : TransactionClassifier {
     override fun classify(message: SmsText): Classification {
         val text = DigitFold.fold(message.body)
@@ -91,7 +75,11 @@ class DeterministicTransactionClassifier : TransactionClassifier {
             Cue(TransactionClass.FEE, Regex("""(?i)\bfees?\b|رسوم"""), 88),
             Cue(TransactionClass.CASH_WITHDRAWAL, Regex("""(?i)\b(cash\s+withdrawal|withdrew|withdrawn|atm\s+withdrawal)\b|سحب نقدي"""), 90),
             Cue(TransactionClass.TRANSFER, Regex("""(?i)\b(transferred|transfer\s+of|transfer\s+to|transfer\s+from)\b|تم تحويل"""), 88),
-            Cue(TransactionClass.CARD_PURCHASE, Regex("""(?i)\b(charged|debited|purchased|purchase\s+of|purchase\s+at|card\s+purchase|spent)\b"""), 88),
+            Cue(
+                TransactionClass.CARD_PURCHASE,
+                Regex("""(?i)\b(charged|debited|purchased|purchase\s+of|purchase\s+at|card\s+purchase|spent|used\s+for)\b|card\s+was\s+used"""),
+                88,
+            ),
             Cue(TransactionClass.CARD_PURCHASE, Regex("""تم خصم"""), 86),
             Cue(TransactionClass.PAYMENT, Regex("""(?i)\b(payment\s+of|payment\s+to|bill\s+payment|paid)\b|تم دفع"""), 84),
         )
@@ -271,7 +259,7 @@ class DeterministicTransactionValidator : TransactionValidator {
     private companion object {
         val supported = setOf("EGP", "USD", "EUR", "GBP")
         val purchaseMovement = Regex(
-            """(?i)\b(charged|debited|purchased|purchase\s+of|purchase\s+at|card\s+purchase|spent)\b|تم خصم""",
+            """(?i)\b(charged|debited|purchased|purchase\s+of|purchase\s+at|card\s+purchase|spent|used\s+for)\b|card\s+was\s+used|تم خصم""",
         )
     }
 }

@@ -1,33 +1,39 @@
 package expense.intelligence
 
 /**
- * On-device SMS understanding. [BankIdentifier], [TransactionClassifier], and
- * [FinancialEntityExtractor] are replaceable. [TransactionValidator] and the
- * confidence rules below stay in front of the ledger.
+ * On-device SMS understanding. The steps are independent and replaceable:
+ * [BankDiscovery], then [TransactionClassifier], then [FinancialEntityExtractor],
+ * then [TransactionValidator], then a [ClassificationDecision].
  *
- * A future small on-device model can replace the classifier and extractor.
- * This type does not call a cloud model or send the SMS anywhere.
+ * Classification and extraction run even when discovery returns unknown.
+ * A ledger post still requires one verified institution plus a validated
+ * high-confidence transaction. An unknown or ambiguous institution stays
+ * in review.
+ *
+ * A future small on-device model can replace discovery, the classifier, or
+ * the extractor. This type does not call a cloud model or send the SMS anywhere.
  */
 class FinancialSmsIntelligence(
-    private val banks: BankIdentifier,
+    private val discovery: BankDiscovery,
     private val classifier: TransactionClassifier,
     private val extractor: FinancialEntityExtractor,
     private val validator: TransactionValidator,
 ) {
     fun assess(message: SmsText): ClassificationDecision {
-        val identification = banks.identify(message)
+        val discovered = discovery.discover(message)
         val classification = classifier.classify(message)
         val extracted = extractor.extract(message)
         val entities = extracted.copy(direction = directionFor(classification.type, message.body))
         val validation = validator.validate(message, classification, entities)
-        val level = levelFor(classification, entities, validation)
-        return ClassificationDecision(identification, classification, entities, validation, level)
+        val level = levelFor(classification, entities, validation, discovered)
+        return ClassificationDecision(discovered, classification, entities, validation, level)
     }
 
     private fun levelFor(
         classification: Classification,
         entities: ExtractedEntities,
         validation: ValidationResult,
+        discovered: BankDiscoveryResult,
     ): ConfidenceLevel {
         if (validation.ledgerForbidden && !validation.forcesReview) return ConfidenceLevel.LOW
         if (validation.forcesReview || classification.ambiguous) return ConfidenceLevel.MEDIUM
@@ -41,6 +47,7 @@ class FinancialSmsIntelligence(
         if (needsCounterparty(classification.type) && entities.merchant.isNullOrBlank() && entities.accountMask.isNullOrBlank()) {
             return ConfidenceLevel.MEDIUM
         }
+        if (discovered.verifiedInstitution == null) return ConfidenceLevel.MEDIUM
         return ConfidenceLevel.HIGH
     }
 
@@ -65,9 +72,20 @@ class FinancialSmsIntelligence(
 
         private val incomingTransfer = Regex("""(?i)\b(received|incoming)\b|\btransfer\s+in\b""")
 
-        fun deterministic(senders: List<RegisteredSender> = emptyList()): FinancialSmsIntelligence {
+        fun deterministic(
+            senders: List<RegisteredSender> = emptyList(),
+            userConfirmed: List<UserConfirmedSender> = emptyList(),
+        ): FinancialSmsIntelligence {
             return FinancialSmsIntelligence(
-                banks = DeterministicBankIdentifier(senders),
+                discovery = CompositeBankDiscovery(
+                    sources = listOf(
+                        VerifiedSenderRegistry(senders),
+                        PublicBankMetadata(),
+                        UserConfirmedSenders(userConfirmed),
+                        OnDeviceModelDiscovery(),
+                        LocalLearnedPatterns(),
+                    ),
+                ),
                 classifier = DeterministicTransactionClassifier(),
                 extractor = DeterministicEntityExtractor(),
                 validator = DeterministicTransactionValidator(),

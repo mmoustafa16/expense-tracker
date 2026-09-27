@@ -2,8 +2,10 @@ package expense.ingest
 
 import expense.ingest.fixture.SyntheticBankProfile
 import expense.intelligence.AmountRole
-import expense.intelligence.DeterministicBankIdentifier
+import expense.intelligence.BankDiscovery
+import expense.intelligence.BankDiscoveryResult
 import expense.intelligence.DeterministicTransactionClassifier
+import expense.intelligence.RegisteredSender
 import expense.intelligence.DeterministicTransactionValidator
 import expense.intelligence.ExtractedEntities
 import expense.intelligence.FinancialEntityExtractor
@@ -24,13 +26,29 @@ import java.time.Instant
 
 class IntelligenceIngestTest {
     @Test
-    fun `a validated purchase posts without a bank template and a replay does not duplicate it`() {
+    fun `an unknown bank purchase is understood and stays in review`() {
         val pipeline = IngestPipeline(ids = IntelligenceIds())
-        val first = pipeline.ingest(sms("1", "Your card was charged EGP 120.50 at Talabat on 02/03/2026 09:15"))
+        val body = "Your card was used for EGP 450 at Talabat"
+        val first = pipeline.ingest(sms("1", body))
+        assertEquals(ParseStatus.UNSUPPORTED, first.status)
+        assertFalse(first.posted)
+        assertTrue(first.state.transactions.isEmpty())
+        assertEquals(1, first.state.reviewQueue().size)
+        assertEquals(body, first.state.messages.single().body)
+        assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
+    }
+
+    @Test
+    fun `a verified sender posts a clear purchase without a template and a replay does not duplicate it`() {
+        val intelligence = FinancialSmsIntelligence.deterministic(
+            listOf(RegisteredSender("example.test-bank", "Example Test Bank", setOf("TESTBANK"))),
+        )
+        val pipeline = IngestPipeline(ids = IntelligenceIds(), intelligence = intelligence)
+        val body = "Your card was charged EGP 120.50 at Talabat on 02/03/2026 09:15"
+        val first = pipeline.ingest(sms("1", body, sender = "TESTBANK"))
         assertEquals(ParseStatus.PARSED, first.status)
         assertTrue(first.posted)
-        assertFalse(first.matchedProfile)
-        assertEquals("unknown", first.state.transactions.single().institutionId)
+        assertEquals("example.test-bank", first.state.transactions.single().institutionId)
         assertEquals(TransactionKind.PURCHASE, first.state.transactions.single().kind)
         assertEquals(Money(12050, Currency.EGP), first.state.transactions.single().amount)
         assertEquals("Talabat", first.state.transactions.single().merchantRaw)
@@ -38,7 +56,7 @@ class IntelligenceIngestTest {
         assertTrue(first.state.reviewQueue().isEmpty())
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
 
-        val replay = pipeline.ingest(sms("1", "Your card was charged EGP 120.50 at Talabat on 02/03/2026 09:15"), first.state)
+        val replay = pipeline.ingest(sms("1", body, sender = "TESTBANK"), first.state)
         assertTrue(replay.alreadyIngested)
         assertEquals(1, replay.state.transactions.size)
     }
@@ -71,7 +89,7 @@ class IntelligenceIngestTest {
     @Test
     fun `a contradictory extraction stays in review`() {
         val lying = FinancialSmsIntelligence(
-            banks = DeterministicBankIdentifier(emptyList()),
+            discovery = BankDiscovery { BankDiscoveryResult.unknown() },
             classifier = DeterministicTransactionClassifier(),
             extractor = FinancialEntityExtractor {
                 ExtractedEntities(

@@ -120,25 +120,24 @@ class UiSessionTest {
     }
 
     @Test
-    fun `a clear purchase reaches the ledger and analytics without a bank template`() {
+    fun `an unknown bank purchase stays in review and out of analytics`() {
         val session = openSession(File(directory.toFile(), "purchase.db"))
         session.accept(
             listOf(
                 InboundSms(
                     sender = "SHOP",
-                    body = "Your card was charged EGP 120.50 at Talabat on 02/03/2026 09:15",
+                    body = "Your card was used for EGP 450 at Talabat",
                     providerMessageId = "c1",
                     receivedAt = Instant.parse("2026-03-02T07:15:00Z"),
                 ),
             ),
         )
-        val posted = session.load()
-        val transaction = posted.transactions.single()
-        assertEquals(false, transaction.manual)
-        assertEquals("Talabat", transaction.merchantRaw)
-        assertTrue(posted.reviewQueue().isEmpty())
+        val stored = session.load()
+        assertTrue(stored.transactions.isEmpty())
+        assertEquals(1, stored.reviewQueue().size)
+        assertEquals("Your card was used for EGP 450 at Talabat", stored.messages.single().body)
         val report = AnalyticsSession.report(session, AnalyticsSlice(month = YearMonth.of(2026, 3)))
-        assertEquals(12050L, report.totals.single().signedMinor)
+        assertTrue(report.totals.isEmpty())
     }
 
     private fun openSession(database: File): LedgerSession {

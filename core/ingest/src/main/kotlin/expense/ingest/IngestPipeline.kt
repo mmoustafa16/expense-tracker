@@ -213,7 +213,7 @@ class IngestPipeline(
             return Interpretation(
                 status = ParseStatus.PARSED,
                 retainBody = true,
-                profile = profile ?: unknownInstitution(assessment),
+                profile = profile ?: carrierProfile(assessment),
                 extraction = intelligenceExtraction(sms.body, assessment),
             )
         }
@@ -232,12 +232,14 @@ class IngestPipeline(
         return understood != templated
     }
 
-    private fun unknownInstitution(assessment: ClassificationDecision): BankProfile {
-        val known = assessment.identification.candidates.singleOrNull()
+    private fun carrierProfile(assessment: ClassificationDecision): BankProfile {
+        val known = checkNotNull(assessment.discovery.verifiedInstitution) {
+            "A ledger post requires one verified institution"
+        }
         return BankProfile(
-            id = known?.institutionId ?: UNKNOWN_INSTITUTION,
+            id = known.institutionId,
             version = INTELLIGENCE_VERSION,
-            displayName = known?.displayName ?: "Unknown",
+            displayName = known.displayName,
             senderIds = emptySet(),
             templates = emptyList(),
         )
@@ -319,7 +321,6 @@ class IngestPipeline(
     }
 
     private companion object {
-        const val UNKNOWN_INSTITUTION: String = "unknown"
         const val INTELLIGENCE_VERSION: String = "intelligence"
     }
 

@@ -36,7 +36,7 @@ enum class TransactionClass {
 }
 
 enum class ConfidenceLevel {
-    /** Eligible for automatic ledger posting after validation. */
+    /** Eligible for automatic ledger posting after validation and a verified institution. */
     HIGH,
 
     /** Keep the message for review. */
@@ -63,25 +63,6 @@ data class RegisteredSender(
     val displayName: String,
     val senderIds: Set<String>,
 )
-
-data class BankCandidate(
-    val institutionId: String,
-    val displayName: String,
-    val confidence: Int,
-)
-
-data class BankIdentification(
-    val candidates: List<BankCandidate>,
-    val unknown: Boolean,
-)
-
-/**
- * Identifies a probable institution from a sender that was registered after verification.
- * An unregistered sender stays unknown. This type must not invent sender ids.
- */
-fun interface BankIdentifier {
-    fun identify(message: SmsText): BankIdentification
-}
 
 data class Classification(
     val type: TransactionClass,
@@ -139,7 +120,7 @@ fun interface TransactionValidator {
 }
 
 data class ClassificationDecision(
-    val identification: BankIdentification,
+    val discovery: BankDiscoveryResult,
     val classification: Classification,
     val entities: ExtractedEntities,
     val validation: ValidationResult,

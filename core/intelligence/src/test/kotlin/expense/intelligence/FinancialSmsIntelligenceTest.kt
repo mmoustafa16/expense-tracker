@@ -11,23 +11,44 @@ import java.time.LocalDateTime
 
 class FinancialSmsIntelligenceTest {
     private val intelligence = FinancialSmsIntelligence.deterministic()
+    private val verified = FinancialSmsIntelligence.deterministic(
+        listOf(RegisteredSender("example.test-bank", "Example Test Bank", setOf("TESTBANK"))),
+    )
 
     @Test
     fun `an unregistered sender stays unknown`() {
         val decision = intelligence.assess(SmsText("CIB", "Charged EGP 10.00 at Shop"))
-        assertTrue(decision.identification.unknown)
-        assertTrue(decision.identification.candidates.isEmpty())
+        assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status)
+        assertTrue(decision.discovery.candidates.isEmpty())
+        assertNull(decision.discovery.verifiedInstitution)
     }
 
     @Test
-    fun `a registered sender is a candidate and an unknown sender is not invented`() {
-        val identified = FinancialSmsIntelligence.deterministic(
-            listOf(RegisteredSender("example.test-bank", "Example Test Bank", setOf("TESTBANK"))),
-        ).assess(SmsText("TESTBANK", "Charged EGP 10.00 at Shop"))
-        assertFalse(identified.identification.unknown)
-        assertEquals("example.test-bank", identified.identification.candidates.single().institutionId)
+    fun `a registered sender is known and an unknown sender is not invented`() {
+        val identified = verified.assess(SmsText("TESTBANK", "Charged EGP 10.00 at Shop"))
+        assertEquals(DiscoveryStatus.KNOWN, identified.discovery.status)
+        assertEquals("example.test-bank", identified.discovery.verifiedInstitution?.institutionId)
+        assertEquals(90, identified.discovery.candidates.single().confidence)
         val stranger = intelligence.assess(SmsText("SOMEBANK", "Charged EGP 10.00 at Shop"))
-        assertTrue(stranger.identification.candidates.isEmpty())
+        assertEquals(DiscoveryStatus.UNKNOWN, stranger.discovery.status)
+        assertTrue(stranger.discovery.candidates.isEmpty())
+    }
+
+    @Test
+    fun `two verified institutions for one sender stay ambiguous`() {
+        val shared = FinancialSmsIntelligence.deterministic(
+            listOf(
+                RegisteredSender("example.bank-a", "Bank A", setOf("SHARED")),
+                RegisteredSender("example.bank-b", "Bank B", setOf("SHARED")),
+            ),
+        )
+        val decision = shared.assess(SmsText("SHARED", "Charged EGP 10.00 at Shop"))
+        assertEquals(DiscoveryStatus.AMBIGUOUS, decision.discovery.status)
+        assertEquals(setOf("example.bank-a", "example.bank-b"), decision.discovery.candidates.map { it.institutionId }.toSet())
+        assertNull(decision.discovery.verifiedInstitution)
+        assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
+        assertEquals(ConfidenceLevel.MEDIUM, decision.level)
+        assertFalse(decision.postable)
     }
 
     @Test
@@ -39,10 +60,15 @@ class FinancialSmsIntelligenceTest {
             assertEquals(Money(12050, Currency.EGP), decision.entities.amount)
             assertEquals(Currency.EGP, decision.entities.currency)
             assertEquals("Talabat", decision.entities.merchant)
-            assertEquals(ConfidenceLevel.HIGH, decision.level)
-            assertTrue(decision.postable)
+            assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status)
+            assertEquals(ConfidenceLevel.MEDIUM, decision.level)
+            assertFalse(decision.postable)
         }
         assertNull(first.entities.occurredAt)
+        val posted = verified.assess(SmsText("TESTBANK", "Purchase of EGP 120.50 from Talabat"))
+        assertEquals(ConfidenceLevel.HIGH, posted.level)
+        assertTrue(posted.postable)
+        assertEquals("example.test-bank", posted.discovery.verifiedInstitution?.institutionId)
     }
 
     @Test
@@ -55,8 +81,11 @@ class FinancialSmsIntelligenceTest {
             assertEquals(TransactionClass.TRANSFER, decision.classification.type)
             assertEquals(Money(50000, Currency.EGP), decision.entities.amount)
             assertEquals(MoneyDirection.DEBIT, decision.entities.direction)
-            assertTrue(decision.postable)
+            assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status)
+            assertFalse(decision.postable)
         }
+        val postedTransfer = verified.assess(SmsText("TESTBANK", "Transferred EGP 500.00 to Sam"))
+        assertTrue(postedTransfer.postable)
 
         val withdrawals = listOf(
             "Cash withdrawal EGP 200.00 at ATM",
@@ -65,7 +94,7 @@ class FinancialSmsIntelligenceTest {
         withdrawals.forEach { decision ->
             assertEquals(TransactionClass.CASH_WITHDRAWAL, decision.classification.type)
             assertEquals(Money(20000, Currency.EGP), decision.entities.amount)
-            assertTrue(decision.postable)
+            assertFalse(decision.postable)
         }
 
         val refund = intelligence.assess(SmsText("X", "Refund of EGP 75.00 from Shop"))
@@ -73,12 +102,12 @@ class FinancialSmsIntelligenceTest {
         assertEquals(Money(7500, Currency.EGP), refund.entities.amount)
         assertEquals("Shop", refund.entities.merchant)
         assertEquals(MoneyDirection.CREDIT, refund.entities.direction)
-        assertTrue(refund.postable)
+        assertFalse(refund.postable)
 
         val fee = intelligence.assess(SmsText("X", "A service fee of EGP 5.00 was applied"))
         assertEquals(TransactionClass.FEE, fee.classification.type)
         assertEquals(Money(500, Currency.EGP), fee.entities.amount)
-        assertTrue(fee.postable)
+        assertFalse(fee.postable)
     }
 
     @Test
@@ -95,7 +124,8 @@ class FinancialSmsIntelligenceTest {
         )
         assertEquals(Money(4000, Currency.EGP), balanceLeft.entities.amount)
         assertEquals(Money(90000, Currency.EGP), balanceLeft.entities.balance)
-        assertTrue(balanceLeft.postable)
+        assertEquals(DiscoveryStatus.UNKNOWN, balanceLeft.discovery.status)
+        assertFalse(balanceLeft.postable)
     }
 
     @Test
@@ -115,7 +145,14 @@ class FinancialSmsIntelligenceTest {
             ),
             skipped.map { it.classification.type },
         )
-        assertTrue(skipped.all { it.validation.ledgerForbidden && !it.postable && it.level == ConfidenceLevel.LOW })
+        assertTrue(
+            skipped.all {
+                it.discovery.status == DiscoveryStatus.UNKNOWN &&
+                    it.validation.ledgerForbidden &&
+                    !it.postable &&
+                    it.level == ConfidenceLevel.LOW
+            },
+        )
     }
 
     @Test
@@ -132,7 +169,7 @@ class FinancialSmsIntelligenceTest {
         assertFalse(missing.postable)
 
         val lying = FinancialSmsIntelligence(
-            banks = DeterministicBankIdentifier(emptyList()),
+            discovery = BankDiscovery { BankDiscoveryResult.unknown() },
             classifier = DeterministicTransactionClassifier(),
             extractor = FinancialEntityExtractor {
                 ExtractedEntities(
