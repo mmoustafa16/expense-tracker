@@ -15,6 +15,7 @@ import expense.ledger.ManualDraft
 import expense.ledger.ManualLedger
 import expense.ledger.ReviewDismissals
 import expense.sms.InboundSms
+import expense.sms.SmsPages
 import expense.sms.SmsSource
 import java.io.File
 import javax.crypto.Cipher
@@ -143,7 +144,7 @@ class LedgerSession(
             if (passphrase == null) {
                 pendingSources += source
             } else {
-                writeLocked(source.messages())
+                ingestLocked(source)
             }
         }
     }
@@ -176,10 +177,14 @@ class LedgerSession(
         val messages = pendingMessages.toList()
         val sources = pendingSources.toList()
         if (messages.isEmpty() && sources.isEmpty()) return
-        val combined = messages + sources.flatMap { it.messages() }
-        writeLocked(combined)
+        if (messages.isNotEmpty()) writeLocked(messages)
+        sources.forEach(::ingestLocked)
         pendingMessages.clear()
         pendingSources.clear()
+    }
+
+    private fun ingestLocked(source: SmsSource) {
+        source.forEachPage(SmsPages.DEFAULT_PAGE_SIZE) { page -> writeLocked(page) }
     }
 
     private fun writeLocked(messages: List<InboundSms>) {

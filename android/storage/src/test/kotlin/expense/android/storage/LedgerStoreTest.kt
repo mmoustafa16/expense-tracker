@@ -36,6 +36,8 @@ import expense.parse.TransactionCandidate
 import expense.parse.TransactionKind
 import expense.sms.BodyHash
 import expense.sms.InboundSms
+import expense.sms.SmsPages
+import expense.sms.SmsSource
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -284,6 +286,40 @@ class DatabaseRetentionTest {
         assertEquals("Charged EGP 20.00 at Shop", session.load().messages.first { it.providerMessageId == "11" }.body)
         val hits = session.search("Shop")
         assertTrue(hits.any { SearchField.BODY in it.fields })
+    }
+
+    @Test
+    fun `a large inbox is ingested one page at a time`() {
+        val databaseFile = directory.resolve("inbox.db").toFile()
+        val opened = AtomicInteger()
+        val session = session(databaseFile, ScriptedVault(KeyMaterial.Available(byteArrayOf(1))), opened)
+        assertEquals(UnlockResult.Ready, unlock(session))
+        val total = 95
+        var fullListRequested = false
+        val source = object : SmsSource {
+            override fun messages(): List<InboundSms> {
+                fullListRequested = true
+                error("the inbox must not be loaded as one list")
+            }
+
+            override fun forEachPage(pageSize: Int, accept: (List<InboundSms>) -> Unit) {
+                assertEquals(SmsPages.DEFAULT_PAGE_SIZE, pageSize)
+                val items = (0 until total).map { index ->
+                    InboundSms("NEWS", "hello $index", index.toString(), Instant.EPOCH.plusMillis(index.toLong()))
+                }
+                var stored = 0
+                SmsPages.consume(items.iterator(), pageSize) { page ->
+                    assertTrue(page.size <= pageSize)
+                    accept(page)
+                    stored += page.size
+                    assertEquals(stored, session.load().messages.size)
+                }
+            }
+        }
+        session.ingest(source)
+        assertFalse(fullListRequested)
+        assertEquals(total, session.load().messages.size)
+        assertTrue(session.load().messages.all { it.body == null })
     }
 
     @Test

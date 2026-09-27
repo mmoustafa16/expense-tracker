@@ -15,6 +15,8 @@ data class SearchHitView(
 )
 
 object SearchPresentation {
+    const val MAX_HITS: Int = 20
+
     fun present(state: LedgerState, matches: List<SearchMatch>): List<SearchHitView> {
         val tree = CategoryOptions.tree(state.categories)
         return matches.map { match ->
@@ -34,7 +36,7 @@ object SearchPresentation {
                 parts += match.fields.joinToString(prefix = "matched ") { it.name.lowercase() }
             }
             if (SearchField.BODY in match.fields) {
-                sms?.body?.takeIf { it.isNotBlank() }?.let { parts += it }
+                sms?.body?.takeIf { it.isNotBlank() }?.let { parts += it.take(BODY_EXCERPT) }
             }
             SearchHitView(
                 transactionId = match.transactionId,
@@ -45,4 +47,6 @@ object SearchPresentation {
             )
         }
     }
+
+    private const val BODY_EXCERPT: Int = 180
 }

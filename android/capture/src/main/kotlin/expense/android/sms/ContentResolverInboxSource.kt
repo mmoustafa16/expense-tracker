@@ -3,6 +3,7 @@ package expense.android.sms
 import android.content.ContentResolver
 import android.provider.Telephony
 import expense.sms.InboundSms
+import expense.sms.SmsPages
 import expense.sms.SmsSource
 
 /**
@@ -21,6 +22,12 @@ class ContentResolverInboxSource(
     }
 
     override fun messages(): List<InboundSms> {
+        val all = ArrayList<InboundSms>()
+        forEachPage(SmsPages.DEFAULT_PAGE_SIZE) { all.addAll(it) }
+        return all
+    }
+
+    override fun forEachPage(pageSize: Int, accept: (List<InboundSms>) -> Unit) {
         if (!readGranted()) {
             throw SecurityException("${SmsPermissions.READ_SMS} is required to scan the SMS inbox")
         }
@@ -30,28 +37,29 @@ class ContentResolverInboxSource(
             null,
             null,
             InboxQuery.sortOrder,
-        ) ?: return emptyList()
-        try {
-            val idIndex = cursor.getColumnIndexOrThrow(InboxQuery.ID)
-            val addressIndex = cursor.getColumnIndexOrThrow(InboxQuery.ADDRESS)
-            val bodyIndex = cursor.getColumnIndexOrThrow(InboxQuery.BODY)
-            val dateIndex = cursor.getColumnIndexOrThrow(InboxQuery.DATE)
-            return buildList(cursor.count.coerceAtLeast(0)) {
-                while (cursor.moveToNext()) {
-                    add(
+        ) ?: return
+        cursor.use { rows ->
+            if (!rows.moveToFirst()) return@use
+            val idIndex = rows.getColumnIndexOrThrow(InboxQuery.ID)
+            val addressIndex = rows.getColumnIndexOrThrow(InboxQuery.ADDRESS)
+            val bodyIndex = rows.getColumnIndexOrThrow(InboxQuery.BODY)
+            val dateIndex = rows.getColumnIndexOrThrow(InboxQuery.DATE)
+            val iterator = iterator {
+                while (!rows.isAfterLast) {
+                    yield(
                         InboxSmsConverter.convert(
                             InboxSmsRow(
-                                providerMessageId = cursor.getLong(idIndex).toString(),
-                                sender = cursor.readString(addressIndex),
-                                body = cursor.readString(bodyIndex),
-                                receivedAtMillis = if (cursor.isNull(dateIndex)) 0L else cursor.getLong(dateIndex),
+                                providerMessageId = rows.getLong(idIndex).toString(),
+                                sender = rows.readString(addressIndex),
+                                body = rows.readString(bodyIndex),
+                                receivedAtMillis = if (rows.isNull(dateIndex)) 0L else rows.getLong(dateIndex),
                             ),
                         ),
                     )
+                    if (!rows.moveToNext()) break
                 }
             }
-        } finally {
-            cursor.close()
+            SmsPages.consume(iterator, pageSize, accept)
         }
     }
 

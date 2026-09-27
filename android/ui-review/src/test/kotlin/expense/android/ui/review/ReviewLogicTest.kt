@@ -38,6 +38,43 @@ class ReviewLogicTest {
     }
 
     @Test
+    fun `a large review queue keeps only one page of sms bodies`() {
+        val total = 1_000
+        val receivedAt = Instant.parse("2026-05-01T07:00:00Z")
+        val state = LedgerState(
+            messages = List(total) { index ->
+                val body = "Charged EGP $index at Shop"
+                StoredSms("sms-$index", "LAB", body, BodyHash.sha256(body), index.toString(), receivedAt)
+            },
+            attempts = List(total) { index ->
+                ParseAttempt(
+                    id = "attempt-$index",
+                    smsId = "sms-$index",
+                    pipelineVersion = "1",
+                    profileId = null,
+                    profileVersion = null,
+                    templateId = null,
+                    status = ParseStatus.UNSUPPORTED,
+                    confidence = null,
+                    extraction = null,
+                    error = null,
+                )
+            },
+        )
+        val page = ReviewQueue.page(state, offset = 40)
+        assertTrue(ReviewQueue.PAGE_SIZE <= 20)
+        assertEquals(ReviewQueue.PAGE_SIZE, page.rows.size)
+        assertEquals(40, page.offset)
+        assertEquals(total, page.total)
+        assertEquals((40 until 60).map { "Charged EGP $it at Shop" }, page.rows.map { it.body })
+        assertTrue(page.rows.none { it.body == "Charged EGP 0 at Shop" || it.body == "Charged EGP 999 at Shop" })
+        val pastEnd = ReviewQueue.page(state, offset = total + 10)
+        assertEquals(980, pastEnd.offset)
+        assertEquals(20, pastEnd.rows.size)
+        assertEquals("Charged EGP 999 at Shop", pastEnd.rows.last().body)
+    }
+
+    @Test
     fun `a manual draft can omit an account and never describes a bank profile`() {
         val source = File("src/main/kotlin/expense/android/ui/review/ManualEntries.kt").readText()
         assertFalse(source.contains("BankProfile"))
