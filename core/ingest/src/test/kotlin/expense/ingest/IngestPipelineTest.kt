@@ -88,13 +88,13 @@ class SyntheticPipelineTest {
     @Test
     fun `known sender without a template stays unsupported and creates no account`() {
         val result = pipeline().ingest(
-            sms(SyntheticBankProfile.SENDER, "Amount EGP 50.00 was processed", "15/01/2026 10:00"),
+            sms(SyntheticBankProfile.SENDER, "Charged EGP 50.00 at Shop", "15/01/2026 10:00"),
         )
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
         assertEquals(SyntheticBankProfile.ID, result.attempt?.profileId)
         assertTrue(result.state.transactions.isEmpty())
         assertTrue(result.state.accounts.isEmpty())
-        assertEquals("Amount EGP 50.00 was processed", result.state.messages.single().body)
+        assertEquals("Charged EGP 50.00 at Shop", result.state.messages.single().body)
     }
 
     @Test

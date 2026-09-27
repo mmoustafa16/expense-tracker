@@ -19,9 +19,9 @@ class PipelineSmsSinkTest {
             SmsSource {
                 InboxSmsConverter.convertAll(
                     listOf(
-                        InboxSmsRow("11", "  LAB-EN  ", "Synthetic notice EGP 4", receivedAt.toEpochMilli()),
-                        InboxSmsRow("12", "معمل", "تنبيه تجريبي جنيه ٥", receivedAt.plusSeconds(60).toEpochMilli()),
-                        InboxSmsRow("13", "LAB-MX", "Lab sample EGP 6 رسالة", receivedAt.plusSeconds(120).toEpochMilli()),
+                        InboxSmsRow("11", "  LAB-EN  ", "Charged EGP 4 at Shop", receivedAt.toEpochMilli()),
+                        InboxSmsRow("12", "معمل", "تم خصم ٥ جنيه", receivedAt.plusSeconds(60).toEpochMilli()),
+                        InboxSmsRow("13", "LAB-MX", "Purchase of EGP 6 at Store", receivedAt.plusSeconds(120).toEpochMilli()),
                         InboxSmsRow("14", "LAB-CHAT", "hello مرحبا", receivedAt.plusSeconds(180).toEpochMilli()),
                     ),
                 )
@@ -31,7 +31,7 @@ class PipelineSmsSinkTest {
         val state = sink.ledgerState()
         assertEquals(listOf("LAB-EN", "معمل", "LAB-MX", "LAB-CHAT"), state.messages.map { it.sender })
         assertEquals(
-            listOf("Synthetic notice EGP 4", "تنبيه تجريبي جنيه ٥", "Lab sample EGP 6 رسالة", null),
+            listOf("Charged EGP 4 at Shop", "تم خصم ٥ جنيه", "Purchase of EGP 6 at Store", null),
             state.messages.map { it.body },
         )
         assertEquals(listOf("11", "12", "13", "14"), state.messages.map { it.providerMessageId })
@@ -51,13 +51,13 @@ class PipelineSmsSinkTest {
     @Test
     fun `scanning the same inbox ids again does not store a second copy`() {
         val receivedAt = Instant.parse("2026-05-01T09:00:00Z")
-        val rows = listOf(InboxSmsRow("11", "LAB-EN", "Synthetic notice EGP 4", receivedAt.toEpochMilli()))
+        val rows = listOf(InboxSmsRow("11", "LAB-EN", "Charged EGP 4 at Shop", receivedAt.toEpochMilli()))
         val sink = sink()
         sink.ingest(SmsSource { InboxSmsConverter.convertAll(rows) })
         sink.ingest(SmsSource { InboxSmsConverter.convertAll(rows) })
 
         assertEquals(1, sink.ledgerState().messages.size)
-        assertEquals("Synthetic notice EGP 4", sink.ledgerState().messages.single().body)
+        assertEquals("Charged EGP 4 at Shop", sink.ledgerState().messages.single().body)
     }
 
     @Test
@@ -65,7 +65,7 @@ class PipelineSmsSinkTest {
         val receivedAt = Instant.parse("2026-05-01T09:00:00Z")
         val sink = sink()
         val broadcast = BroadcastSmsConverter.joinParts(
-            listOf(DecodedSmsPart("LAB-EN", "Synthetic notice EGP 4", receivedAt.toEpochMilli())),
+            listOf(DecodedSmsPart("LAB-EN", "Charged EGP 4 at Shop", receivedAt.toEpochMilli())),
             receivedAtFallback = receivedAt,
         )
         sink.accept(broadcast)
@@ -76,7 +76,7 @@ class PipelineSmsSinkTest {
                         InboxSmsRow(
                             providerMessageId = "11",
                             sender = "LAB-EN",
-                            body = "Synthetic notice EGP 4",
+                            body = "Charged EGP 4 at Shop",
                             receivedAtMillis = receivedAt.plusSeconds(30).toEpochMilli(),
                         ),
                     ),
@@ -88,7 +88,7 @@ class PipelineSmsSinkTest {
         assertEquals(2, messages.size)
         assertNull(messages[0].providerMessageId)
         assertEquals("11", messages[1].providerMessageId)
-        assertEquals("Synthetic notice EGP 4", messages[0].body)
+        assertEquals("Charged EGP 4 at Shop", messages[0].body)
         assertEquals(1, sink.ledgerState().attempts.size)
         assertTrue(sink.ledgerState().transactions.isEmpty())
     }

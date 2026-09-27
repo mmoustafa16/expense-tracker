@@ -29,6 +29,7 @@ import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
 import expense.parse.Extraction
+import expense.parse.FinancialSignal
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
 import expense.parse.TransactionCandidate
@@ -530,6 +531,56 @@ class SqlDelightLedgerRepository(
         }
         return ReviewWindow(rows, start, total)
     }
+
+    /**
+     * Drops retained bodies that the current gate would ignore.
+     * Only unsupported rows with no profile, and retained copies that have no
+     * open attempt, are visited. Parsed and failed rows stay. One page of bodies
+     * is read at a time.
+     */
+    fun reclassifyRetained(pageSize: Int): Int {
+        require(pageSize > 0)
+        val unsupported = dropRetained(pageSize, unsupported = true)
+        val orphans = dropRetained(pageSize, unsupported = false)
+        return unsupported + orphans
+    }
+
+    private fun dropRetained(pageSize: Int, unsupported: Boolean): Int {
+        val queries = database.expenseQueries
+        var dropped = 0
+        var afterReceivedAt = -1L
+        var afterSmsId = ""
+        while (true) {
+            val page = if (unsupported) {
+                queries.selectUnsupportedRetained(afterReceivedAt, afterSmsId, pageSize.toLong()).executeAsList().map {
+                    RetainedBody(it.smsId, it.body, it.receivedAt)
+                }
+            } else {
+                queries.selectOrphanRetained(afterReceivedAt, afterSmsId, pageSize.toLong()).executeAsList().map {
+                    RetainedBody(it.smsId, it.body, it.receivedAt)
+                }
+            }
+            if (page.isEmpty()) return dropped
+            val last = page.last()
+            afterReceivedAt = last.receivedAt
+            afterSmsId = last.smsId
+            database.transaction {
+                page.forEach { row ->
+                    val body = row.body ?: return@forEach
+                    if (FinancialSignal.present(body)) return@forEach
+                    queries.clearSmsBody(row.smsId)
+                    if (unsupported) queries.ignoreUnsupportedAttempts(row.smsId)
+                    dropped++
+                }
+            }
+        }
+    }
+
+    private data class RetainedBody(
+        val smsId: String,
+        val body: String?,
+        val receivedAt: Long,
+    )
 
     fun append(previous: LedgerState, next: LedgerState) {
         val queries = database.expenseQueries

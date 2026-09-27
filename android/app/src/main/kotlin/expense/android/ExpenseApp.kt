@@ -4,14 +4,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +42,7 @@ import expense.android.ui.analytics.AnalyticsRoute
 import expense.android.ui.ledger.AccountRoute
 import expense.android.ui.ledger.CategoriesRoute
 import expense.android.ui.ledger.LedgerRoute
+import expense.android.ui.ledger.LedgerScanSummary
 import expense.android.ui.ledger.TransactionRoute
 import expense.android.ui.review.ManualTransactionRoute
 import expense.android.ui.review.ReviewRoute
@@ -115,7 +114,7 @@ fun ExpenseApp(
     }
     fun openLedger() {
         if (nav.currentDestination?.route != Routes.Unlock) return
-        nav.navigate(Routes.Review) {
+        nav.navigate(Routes.Ledger) {
             popUpTo(Routes.Unlock) { inclusive = true }
         }
         val missing = application.missingSmsPermissions()
@@ -137,7 +136,7 @@ fun ExpenseApp(
                             selected = route == destination.route,
                             onClick = {
                                 nav.navigate(destination.route) {
-                                    popUpTo(Routes.Review) { saveState = true }
+                                    popUpTo(Routes.Ledger) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -150,12 +149,10 @@ fun ExpenseApp(
             }
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-        InboxScanBanner(scan)
         NavHost(
             navController = nav,
             startDestination = Routes.Unlock,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.padding(padding).fillMaxSize(),
         ) {
             composable(Routes.Unlock) {
                 ColdStartUnlockScreen(
@@ -191,6 +188,8 @@ fun ExpenseApp(
                 LedgerRoute(
                     session = application.ledger(),
                     refreshEpoch = epoch,
+                    scan = scan.summary(),
+                    onOpenSearch = { nav.navigate(Routes.Search) },
                     onOpenAccount = { nav.navigate(Routes.account(it)) },
                     onOpenTransaction = { nav.navigate(Routes.transaction(it)) },
                     onOpenCategories = { nav.navigate(Routes.Categories) },
@@ -227,7 +226,9 @@ fun ExpenseApp(
                 }
             }
             composable(Routes.Search) {
-                SearchRoute(session = application.ledger(), refreshEpoch = epoch)
+                NestedPage(title = "Search", onBack = { nav.popBackStack() }) {
+                    SearchRoute(session = application.ledger(), refreshEpoch = epoch)
+                }
             }
             composable(Routes.Analytics) {
                 AnalyticsRoute(
@@ -250,17 +251,18 @@ fun ExpenseApp(
                 }
             }
         }
-        }
     }
 }
 
-@Composable
-private fun InboxScanBanner(scan: InboxScan) {
-    if (scan.phase == InboxScanPhase.IDLE) return
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(InboxScanText.progress(scan.tally, running = scan.phase == InboxScanPhase.RUNNING))
-        InboxScanText.unmatchedNote(scan.tally)?.let { Text(it) }
-    }
+private fun InboxScan.summary(): LedgerScanSummary? {
+    if (phase == InboxScanPhase.IDLE) return null
+    return LedgerScanSummary(
+        title = InboxScanText.title(running = phase == InboxScanPhase.RUNNING),
+        summary = InboxScanText.compact(tally),
+        reviewLine = InboxScanText.reviewLine(tally),
+        detail = InboxScanText.detail(tally),
+        note = InboxScanText.unmatchedNote(tally),
+    )
 }
 
 @Composable
@@ -289,9 +291,8 @@ private data class Destination(
 )
 
 private val destinations = listOf(
-    Destination(Routes.Review, "Review", Icons.Filled.Info),
     Destination(Routes.Ledger, "Ledger", Icons.Filled.AccountBox),
-    Destination(Routes.Search, "Search", Icons.Filled.Search),
+    Destination(Routes.Review, "Review", Icons.Filled.Info),
     Destination(Routes.Analytics, "Analytics", Icons.Filled.DateRange),
 )
 

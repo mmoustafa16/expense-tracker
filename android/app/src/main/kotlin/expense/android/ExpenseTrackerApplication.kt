@@ -52,6 +52,7 @@ class ExpenseTrackerApplication : Application() {
 
     fun scanInboxIfGranted() {
         if (inboxScanned()) {
+            reclassifyStoredMessages()
             publishStoredSummary()
             return
         }
@@ -64,7 +65,11 @@ class ExpenseTrackerApplication : Application() {
             session.ingest(access.inboxSource()) { tally ->
                 inboxScanState.value = InboxScan(phase = InboxScanPhase.RUNNING, tally = tally)
             }
-            getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).edit().putBoolean(INBOX_SCANNED, true).apply()
+            getSharedPreferences(SETUP_PREFS, MODE_PRIVATE)
+                .edit()
+                .putBoolean(INBOX_SCANNED, true)
+                .putInt(CLASSIFICATION_REVISION_KEY, CLASSIFICATION_REVISION)
+                .apply()
             scanGate.finish()
             inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
         } catch (_: SecurityException) {
@@ -83,6 +88,14 @@ class ExpenseTrackerApplication : Application() {
         inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
     }
 
+    private fun reclassifyStoredMessages() {
+        if (!session.isUnlocked()) return
+        val prefs = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE)
+        if (prefs.getInt(CLASSIFICATION_REVISION_KEY, 0) >= CLASSIFICATION_REVISION) return
+        session.reclassifyRetained()
+        prefs.edit().putInt(CLASSIFICATION_REVISION_KEY, CLASSIFICATION_REVISION).apply()
+    }
+
     private fun inboxScanned(): Boolean {
         return getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).getBoolean(INBOX_SCANNED, false)
     }
@@ -90,5 +103,7 @@ class ExpenseTrackerApplication : Application() {
     private companion object {
         const val SETUP_PREFS = "expense_setup"
         const val INBOX_SCANNED = "inbox_scanned"
+        const val CLASSIFICATION_REVISION_KEY = "classification_revision"
+        const val CLASSIFICATION_REVISION = 1
     }
 }

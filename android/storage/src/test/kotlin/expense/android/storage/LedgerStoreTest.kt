@@ -212,6 +212,70 @@ class LedgerRepositoryTest {
     }
 
     @Test
+    fun `notices stored under the old gate leave review one page at a time`() {
+        val repository = memoryRepository()
+        val received = Instant.parse("2026-05-01T00:00:00Z")
+        fun sms(id: String, body: String, seconds: Long) = StoredSms(
+            id,
+            "LAB",
+            body,
+            BodyHash.sha256(body),
+            id,
+            received.plusSeconds(seconds),
+        )
+        fun attempt(id: String, smsId: String, status: ParseStatus) = ParseAttempt(
+            id = id,
+            smsId = smsId,
+            pipelineVersion = "1",
+            profileId = null,
+            profileVersion = null,
+            templateId = null,
+            status = status,
+            confidence = null,
+            extraction = null,
+            error = null,
+        )
+        val promo = "Save EGP 50 this weekend. Use code 20"
+        val otp = "Your OTP is 482193"
+        val balance = "Your available balance is EGP 1,250.00"
+        val charged = "Charged EGP 20.00 at Shop"
+        val parsed = "TB|purchase|EGP|10.00|Shop|4242|S1|15/01/2026 10:00"
+        repository.save(
+            LedgerState(
+                messages = listOf(
+                    sms("promo", promo, 0),
+                    sms("otp", otp, 1),
+                    sms("balance", balance, 2),
+                    sms("charged", charged, 3),
+                    sms("parsed", parsed, 4),
+                    sms("orphan", promo, 5),
+                ),
+                attempts = listOf(
+                    attempt("a-promo", "promo", ParseStatus.UNSUPPORTED),
+                    attempt("a-otp", "otp", ParseStatus.UNSUPPORTED),
+                    attempt("a-balance", "balance", ParseStatus.UNSUPPORTED),
+                    attempt("a-charged", "charged", ParseStatus.UNSUPPORTED),
+                    attempt("a-parsed", "parsed", ParseStatus.PARSED),
+                ),
+            ),
+        )
+        assertEquals(4, repository.reclassifyRetained(pageSize = 1))
+        val loaded = repository.load()
+        assertEquals(null, loaded.messages.single { it.id == "promo" }.body)
+        assertEquals(null, loaded.messages.single { it.id == "otp" }.body)
+        assertEquals(null, loaded.messages.single { it.id == "balance" }.body)
+        assertEquals(null, loaded.messages.single { it.id == "orphan" }.body)
+        assertEquals(charged, loaded.messages.single { it.id == "charged" }.body)
+        assertEquals(parsed, loaded.messages.single { it.id == "parsed" }.body)
+        assertEquals(ParseStatus.IGNORED_NOT_BANK, loaded.attempts.single { it.smsId == "promo" }.status)
+        assertEquals(ParseStatus.UNSUPPORTED, loaded.attempts.single { it.smsId == "charged" }.status)
+        assertEquals(ParseStatus.PARSED, loaded.attempts.single { it.smsId == "parsed" }.status)
+        assertEquals(1, repository.reviewWindow(0, 20).total)
+        assertEquals(2, repository.storedTally().financial)
+        assertEquals(1, repository.storedTally().unsupported)
+    }
+
+    @Test
     fun `the android session is wired to the verified bank catalog`() {
         val source = File("src/main/kotlin/expense/android/storage/LedgerSessions.kt").readText()
         assertTrue(source.contains("VerifiedBankCatalog"))

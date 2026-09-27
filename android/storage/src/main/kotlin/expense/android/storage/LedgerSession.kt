@@ -163,6 +163,10 @@ class LedgerSession(
 
     fun storedTally(): IngestTally = synchronized(lock) { repositoryLocked().storedTally() }
 
+    fun reclassifyRetained(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE): Int {
+        return synchronized(lock) { repositoryLocked().reclassifyRetained(pageSize) }
+    }
+
     fun load(): LedgerState = synchronized(lock) { repositoryLocked().load() }
 
     fun search(query: String): List<SearchMatch> = synchronized(lock) { repositoryLocked().search(query) }

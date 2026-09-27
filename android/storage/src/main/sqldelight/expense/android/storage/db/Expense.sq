@@ -452,3 +452,42 @@ AND NOT EXISTS (
 )
 ORDER BY s.received_at ASC, a.id ASC
 LIMIT :limit OFFSET :offset;
+
+selectUnsupportedRetained:
+SELECT s.id AS smsId, s.body AS body, s.received_at AS receivedAt
+FROM stored_sms s
+INNER JOIN parse_attempt a ON a.sms_id = s.id
+WHERE s.body IS NOT NULL
+  AND a.status = 'UNSUPPORTED'
+  AND a.profile_id IS NULL
+  AND (
+    s.received_at > :afterReceivedAt
+    OR (s.received_at = :afterReceivedAt AND s.id > :afterSmsId)
+  )
+GROUP BY s.id, s.body, s.received_at
+ORDER BY s.received_at, s.id
+LIMIT :limit;
+
+selectOrphanRetained:
+SELECT s.id AS smsId, s.body AS body, s.received_at AS receivedAt
+FROM stored_sms s
+WHERE s.body IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM parse_attempt a
+    WHERE a.sms_id = s.id
+      AND a.status IN ('UNSUPPORTED', 'PARSED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+  )
+  AND (
+    s.received_at > :afterReceivedAt
+    OR (s.received_at = :afterReceivedAt AND s.id > :afterSmsId)
+  )
+ORDER BY s.received_at, s.id
+LIMIT :limit;
+
+clearSmsBody:
+UPDATE stored_sms SET body = NULL WHERE id = :id;
+
+ignoreUnsupportedAttempts:
+UPDATE parse_attempt
+SET status = 'IGNORED_NOT_BANK'
+WHERE sms_id = :smsId AND status = 'UNSUPPORTED' AND profile_id IS NULL;

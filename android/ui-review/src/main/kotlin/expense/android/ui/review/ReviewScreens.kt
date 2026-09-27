@@ -116,7 +116,7 @@ fun ReviewScreen(
     ) {
         item {
             Text("Review", style = MaterialTheme.typography.headlineSmall)
-            Text("Uncertain or unmatched financial messages stay here. Dismiss one, or record it yourself.")
+            Text("Messages that look like transactions, and could not be posted, stay here.")
             if (message != null) Text(message)
             if (page.rows.isEmpty()) Text("No messages are waiting for review.")
             if (page.total > ReviewQueue.PAGE_SIZE) {

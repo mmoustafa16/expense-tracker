@@ -1,20 +1,28 @@
 package expense.android.ui.ledger
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,10 +48,20 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+data class LedgerScanSummary(
+    val title: String,
+    val summary: String,
+    val reviewLine: String,
+    val detail: String,
+    val note: String?,
+)
+
 @Composable
 fun LedgerRoute(
     session: LedgerSession,
     refreshEpoch: Int,
+    scan: LedgerScanSummary? = null,
+    onOpenSearch: () -> Unit,
     onOpenAccount: (String) -> Unit,
     onOpenTransaction: (String) -> Unit,
     onOpenCategories: () -> Unit,
@@ -63,13 +81,15 @@ fun LedgerRoute(
         CircularProgressIndicator(Modifier.padding(24.dp))
         return
     }
-    LedgerScreen(loaded, message, onOpenAccount, onOpenTransaction, onOpenCategories)
+    LedgerScreen(loaded, message, scan, onOpenSearch, onOpenAccount, onOpenTransaction, onOpenCategories)
 }
 
 @Composable
 fun LedgerScreen(
     tree: LedgerTree,
     message: String?,
+    scan: LedgerScanSummary?,
+    onOpenSearch: () -> Unit,
     onOpenAccount: (String) -> Unit,
     onOpenTransaction: (String) -> Unit,
     onOpenCategories: () -> Unit,
@@ -81,7 +101,17 @@ fun LedgerScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Ledger", style = MaterialTheme.typography.headlineSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Ledger", style = MaterialTheme.typography.headlineSmall)
+            IconButton(onClick = onOpenSearch) {
+                Icon(Icons.Filled.Search, contentDescription = "Search")
+            }
+        }
+        if (scan != null) ScanSummaryCard(scan)
         TextButton(onClick = onOpenCategories) { Text("Categories") }
         message?.let { Text(it) }
         if (tree.banks.isEmpty()) {
@@ -103,6 +133,26 @@ fun LedgerScreen(
                 bank.unassigned.forEach { transaction ->
                     TransactionRow(transaction) { onOpenTransaction(transaction.id) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScanSummaryCard(scan: LedgerScanSummary) {
+    var expanded by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded },
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(scan.title, style = MaterialTheme.typography.titleSmall)
+            Text(scan.summary)
+            Text(scan.reviewLine)
+            if (expanded) {
+                Text(scan.detail)
+                scan.note?.let { Text(it) }
             }
         }
     }

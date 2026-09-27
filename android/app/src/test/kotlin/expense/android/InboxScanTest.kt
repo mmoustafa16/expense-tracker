@@ -48,5 +48,10 @@ class InboxScanTest {
         )
         assertNull(InboxScanText.unmatchedNote(tally.copy(posted = 1)))
         assertFalse(text.contains("EGP"))
+        assertEquals("Scanning the inbox", InboxScanText.title(running = true))
+        assertEquals("Last inbox scan", InboxScanText.title(running = false))
+        assertEquals("10 scanned · 4 financial · 0 posted", InboxScanText.compact(tally))
+        assertEquals("4 need review", InboxScanText.reviewLine(tally))
+        assertEquals("Matched 0 · Parsed 0 · Posted 0.", InboxScanText.detail(tally))
     }
 }
