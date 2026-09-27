@@ -6,6 +6,7 @@ sqldelight = "2.0.2"
 sqlcipher = "4.6.1"
 androidxSqlite = "2.4.0"
 biometric = "1.1.0"
+fragment = "1.8.5"
 composeBom = "2024.10.01"
 activityCompose = "1.9.3"
 navigationCompose = "2.8.3"
@@ -18,6 +19,7 @@ sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", versi
 sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 androidx-sqlite = { module = "androidx.sqlite:sqlite", version.ref = "androidxSqlite" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-material3 = { module = "androidx.compose.material3:material3" }

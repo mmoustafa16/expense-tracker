@@ -53,6 +53,9 @@ dependencies {
     implementation(project(":android:ui-search"))
     implementation(project(":android:ui-analytics"))
     implementation(libs.activity.compose)
+    // Biometric 1.1.0 pins Fragment 1.2.5, which rejects Activity Result
+    // permission request codes (they are always >= 65536).
+    implementation(libs.androidx.fragment)
     implementation(libs.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(platform(libs.compose.bom))
