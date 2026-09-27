@@ -6,6 +6,7 @@ import expense.categories.CategoryChange
 import expense.categories.NewCategory
 import expense.ingest.IdGenerator
 import expense.ingest.IngestPipeline
+import expense.ingest.IngestTally
 import expense.ingest.UuidIdGenerator
 import expense.ledger.AccountNames
 import expense.ledger.Correction
@@ -139,15 +140,28 @@ class LedgerSession(
         }
     }
 
-    fun ingest(source: SmsSource) {
-        synchronized(lock) {
+    fun ingest(source: SmsSource, onPage: (IngestTally) -> Unit = {}) {
+        val queued = synchronized(lock) {
             if (passphrase == null) {
                 pendingSources += source
+                true
             } else {
-                ingestLocked(source)
+                false
             }
         }
+        if (queued) return
+        stream(source, onPage)
     }
+
+    fun reviewWindow(offset: Int, limit: Int): ReviewWindow {
+        return synchronized(lock) { repositoryLocked().reviewWindow(offset, limit) }
+    }
+
+    fun snapshot(matches: List<SearchMatch>): LedgerState {
+        return synchronized(lock) { repositoryLocked().snapshot(matches) }
+    }
+
+    fun storedTally(): IngestTally = synchronized(lock) { repositoryLocked().storedTally() }
 
     fun load(): LedgerState = synchronized(lock) { repositoryLocked().load() }
 
@@ -178,13 +192,29 @@ class LedgerSession(
         val sources = pendingSources.toList()
         if (messages.isEmpty() && sources.isEmpty()) return
         if (messages.isNotEmpty()) writeLocked(messages)
-        sources.forEach(::ingestLocked)
+        sources.forEach { stream(it) {} }
         pendingMessages.clear()
         pendingSources.clear()
     }
 
-    private fun ingestLocked(source: SmsSource) {
-        source.forEachPage(SmsPages.DEFAULT_PAGE_SIZE) { page -> writeLocked(page) }
+    private fun stream(source: SmsSource, onPage: (IngestTally) -> Unit) {
+        var tally = IngestTally()
+        var working = synchronized(lock) { repositoryLocked().loadWorkingSet() }
+        source.forEachPage(SmsPages.DEFAULT_PAGE_SIZE) { page ->
+            if (page.isEmpty()) return@forEachPage
+            val before = working
+            var cursor = working
+            var pageTally = IngestTally()
+            for (sms in page) {
+                val result = pipeline.ingest(sms, cursor)
+                cursor = result.state
+                pageTally = pageTally.add(result)
+            }
+            synchronized(lock) { repositoryLocked().append(before, cursor) }
+            working = cursor.withoutMessageBodies()
+            tally += pageTally
+            onPage(tally)
+        }
     }
 
     private fun writeLocked(messages: List<InboundSms>) {
@@ -204,4 +234,13 @@ class LedgerSession(
         repository = created
         return created
     }
+}
+
+internal fun LedgerState.withoutMessageBodies(): LedgerState {
+    if (messages.none { !it.body.isNullOrEmpty() }) return this
+    return copy(
+        messages = messages.map { message ->
+            if (message.body.isNullOrEmpty()) message else message.copy(body = "")
+        },
+    )
 }

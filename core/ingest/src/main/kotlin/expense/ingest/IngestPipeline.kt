@@ -34,15 +34,16 @@ class IngestPipeline(
 
     fun ingest(incoming: InboundSms, state: LedgerState = LedgerState.empty()): IngestResult {
         val sms = bounded(incoming)
+        val financial = FinancialSignal.present(sms.body)
         if (DuplicateMatcher.providerReplay(state.messages, sms.providerMessageId) != null) {
-            return IngestResult(state, status = null, attempt = null, alreadyIngested = true)
+            return IngestResult(state, status = null, attempt = null, alreadyIngested = true, financial = financial)
         }
         val hash = BodyHash.sha256(sms.body)
         val bodyReplay = DuplicateMatcher.bodyReplay(state.messages, sms.sender, hash, sms.receivedAt)
         if (bodyReplay != null) {
             val duplicate = storedCopy(sms, hash, retainBody = bodyReplay.body != null)
             val linked = poster.attachDuplicateSms(state, bodyReplay.id, duplicate)
-            return IngestResult(linked, status = null, attempt = null, alreadyIngested = true)
+            return IngestResult(linked, status = null, attempt = null, alreadyIngested = true, financial = financial)
         }
         val decision = interpret(sms)
         val stored = storedCopy(sms, hash, decision.retainBody)
@@ -62,11 +63,21 @@ class IngestPipeline(
             messages = state.messages + stored,
             attempts = state.attempts + attempt,
         )
-        if (decision.status == ParseStatus.PARSED && decision.profile != null && decision.extraction != null) {
-            next = poster.post(next, stored, decision.profile, decision.extraction)
+        val matchedProfile = decision.profile != null || decision.status == ParseStatus.AMBIGUOUS
+        val posting = decision.status == ParseStatus.PARSED && decision.profile != null && decision.extraction != null
+        if (posting) {
+            next = poster.post(next, stored, decision.profile!!, decision.extraction!!)
         }
         next = CorrectionOverlay.apply(next, ids)
-        return IngestResult(next, decision.status, attempt, alreadyIngested = false)
+        return IngestResult(
+            state = next,
+            status = decision.status,
+            attempt = attempt,
+            alreadyIngested = false,
+            financial = financial,
+            matchedProfile = matchedProfile,
+            posted = posting,
+        )
     }
 
     fun ingestAll(source: SmsSource, state: LedgerState = LedgerState.empty()): LedgerState {

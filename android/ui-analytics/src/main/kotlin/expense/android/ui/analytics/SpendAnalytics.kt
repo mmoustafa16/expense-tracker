@@ -12,6 +12,7 @@ import java.time.YearMonth
 
 data class AnalyticsSlice(
     val month: YearMonth? = null,
+    val year: Int? = null,
     val institutionId: String? = null,
     val accountId: String? = null,
     val categoryId: String? = null,
@@ -166,7 +167,9 @@ object SpendAnalytics {
 
     private fun matches(transaction: Transaction, slice: AnalyticsSlice): Boolean {
         if (!transaction.includeInSpend) return false
-        if (slice.month != null && SpendPolicy.spendMonth(transaction) != slice.month) return false
+        val spendMonth = SpendPolicy.spendMonth(transaction)
+        if (slice.month != null && spendMonth != slice.month) return false
+        if (slice.month == null && slice.year != null && spendMonth.year != slice.year) return false
         if (slice.institutionId != null && transaction.institutionId != slice.institutionId) return false
         if (slice.accountId != null && transaction.accountId != slice.accountId) return false
         if (slice.merchantId != null && transaction.merchantId != slice.merchantId) return false
@@ -184,4 +187,13 @@ object SpendAnalytics {
     }
 
     const val UNCATEGORIZED: String = "uncategorized"
+}
+
+object AnalyticsCalendar {
+    fun years(months: List<YearMonth>): List<Int> = months.map { it.year }.distinct().sortedDescending()
+
+    fun monthsFor(months: List<YearMonth>, year: Int?): List<YearMonth> {
+        val scoped = if (year == null) months else months.filter { it.year == year }
+        return scoped.distinct().sortedDescending()
+    }
 }

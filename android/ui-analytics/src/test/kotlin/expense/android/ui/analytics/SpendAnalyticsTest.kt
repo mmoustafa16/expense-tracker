@@ -96,6 +96,19 @@ class SpendAnalyticsTest {
         val options = SpendAnalytics.options(state)
         assertEquals(listOf(YearMonth.of(2026, 5), YearMonth.of(2026, 4)), options.months)
         assertEquals(listOf("bank-1", "bank-2"), options.institutions)
+        val year = SpendAnalytics.report(state, AnalyticsSlice(year = 2026))
+        assertEquals(5, year.transactionCount)
+        assertTrue(AnalyticsCalendar.years(options.months) == listOf(2026))
+        assertEquals(options.months, AnalyticsCalendar.monthsFor(options.months, 2026))
+    }
+
+    @Test
+    fun `an empty ledger does not invent months`() {
+        val options = SpendAnalytics.options(LedgerState())
+        assertTrue(options.months.isEmpty())
+        assertTrue(AnalyticsCalendar.years(options.months).isEmpty())
+        assertTrue(AnalyticsCalendar.monthsFor(options.months, 2026).isEmpty())
+        assertEquals(0, SpendAnalytics.report(LedgerState(), AnalyticsSlice(month = YearMonth.of(2026, 5))).transactionCount)
     }
 
     private fun tx(

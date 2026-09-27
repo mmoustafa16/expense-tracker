@@ -175,6 +175,48 @@ class LedgerRepositoryTest {
         assertTrue(repository.search("   ").isEmpty())
     }
 
+    @Test
+    fun `search returns every historical match newest first and a page does not load the rest`() {
+        val repository = memoryRepository()
+        val older = (0 until 24).map { index ->
+            val body = "talabat purchase $index"
+            StoredSms(
+                id = "old-$index",
+                sender = "LAB",
+                body = body,
+                bodyHash = BodyHash.sha256(body),
+                providerMessageId = "p$index",
+                receivedAt = Instant.parse("2024-01-01T00:00:00Z").plusSeconds(index.toLong()),
+            )
+        }
+        val recentBody = "x".repeat(220) + "talabat later"
+        val recent = StoredSms(
+            id = "new-1",
+            sender = "LAB",
+            body = recentBody,
+            bodyHash = BodyHash.sha256(recentBody),
+            providerMessageId = "p-new",
+            receivedAt = Instant.parse("2026-06-01T00:00:00Z"),
+        )
+        repository.save(LedgerState(messages = older + recent))
+        val hits = repository.search("talabat")
+        assertEquals(25, hits.size)
+        assertEquals("new-1", hits.first().smsId)
+        assertEquals("old-0", hits.last().smsId)
+        assertTrue(hits.first().sortAt > hits.last().sortAt)
+        val page = hits.take(20)
+        val snapshot = repository.snapshot(page)
+        assertEquals(page.mapNotNull { it.smsId }.toSet(), snapshot.messages.map { it.id }.toSet())
+        assertTrue(snapshot.messages.none { it.id == "old-0" })
+        assertTrue(snapshot.messages.single { it.id == "new-1" }.body.orEmpty().contains("talabat later"))
+    }
+
+    @Test
+    fun `the android session is wired to the verified bank catalog`() {
+        val source = File("src/main/kotlin/expense/android/storage/LedgerSessions.kt").readText()
+        assertTrue(source.contains("VerifiedBankCatalog"))
+    }
+
     private fun sampleTransaction(categoryId: String?): Transaction {
         return Transaction(
             id = "tx-1",
@@ -320,6 +362,55 @@ class DatabaseRetentionTest {
         assertFalse(fullListRequested)
         assertEquals(total, session.load().messages.size)
         assertTrue(session.load().messages.all { it.body == null })
+    }
+
+    @Test
+    fun `a paged scan keeps financial bodies in the database and review shows one page`() {
+        val databaseFile = directory.resolve("financial.db").toFile()
+        val opened = AtomicInteger()
+        val session = session(databaseFile, ScriptedVault(KeyMaterial.Available(byteArrayOf(1))), opened)
+        assertEquals(UnlockResult.Ready, unlock(session))
+        val total = 45
+        val source = object : SmsSource {
+            override fun messages(): List<InboundSms> = error("the inbox must not be loaded as one list")
+
+            override fun forEachPage(pageSize: Int, accept: (List<InboundSms>) -> Unit) {
+                val items = (0 until total).map { index ->
+                    InboundSms(
+                        sender = "LAB",
+                        body = "Charged EGP $index at Shop",
+                        providerMessageId = index.toString(),
+                        receivedAt = Instant.EPOCH.plusSeconds(index.toLong()),
+                    )
+                } + InboundSms("NEWS", "hello there", "chatter", Instant.EPOCH.plusSeconds(1000))
+                SmsPages.consume(items.iterator(), pageSize, accept)
+            }
+        }
+        var pages = 0
+        session.ingest(source) { pages += 1 }
+        val loaded = session.load()
+        assertEquals(total + 1, loaded.messages.size)
+        assertEquals(
+            (0 until total).map { "Charged EGP $it at Shop" },
+            loaded.messages.filter { it.body != null }.map { it.body },
+        )
+        assertTrue(loaded.transactions.isEmpty())
+        assertTrue(pages >= 2)
+        val first = session.reviewWindow(0, 20)
+        assertEquals(20, first.rows.size)
+        assertEquals(total, first.total)
+        assertEquals("Charged EGP 0 at Shop", first.rows.first().body)
+        val second = session.reviewWindow(40, 20)
+        assertEquals(5, second.rows.size)
+        assertEquals("Charged EGP 44 at Shop", second.rows.last().body)
+        assertTrue(second.rows.none { it.body == "Charged EGP 0 at Shop" })
+        val tally = session.storedTally()
+        assertEquals(total + 1, tally.scanned)
+        assertEquals(total, tally.financial)
+        assertEquals(0, tally.matchedProfile)
+        assertEquals(total, tally.unsupported)
+        assertEquals(0, tally.parsed)
+        assertEquals(0, tally.posted)
     }
 
     @Test

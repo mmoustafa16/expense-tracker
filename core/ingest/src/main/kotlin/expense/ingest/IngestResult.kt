@@ -9,4 +9,7 @@ data class IngestResult(
     val status: ParseStatus?,
     val attempt: ParseAttempt?,
     val alreadyIngested: Boolean = false,
+    val financial: Boolean = false,
+    val matchedProfile: Boolean = false,
+    val posted: Boolean = false,
 )

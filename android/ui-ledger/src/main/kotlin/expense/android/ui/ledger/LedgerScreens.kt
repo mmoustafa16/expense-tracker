@@ -84,7 +84,10 @@ fun LedgerScreen(
         Text("Ledger", style = MaterialTheme.typography.headlineSmall)
         TextButton(onClick = onOpenCategories) { Text("Categories") }
         message?.let { Text(it) }
-        if (tree.banks.isEmpty()) Text("No banks or transactions yet.")
+        if (tree.banks.isEmpty()) {
+            Text("No banks or transactions yet.")
+            Text("Financial messages with no verified bank profile stay in Review and are not posted.")
+        }
         tree.banks.forEach { bank ->
             Text(bank.institutionId, style = MaterialTheme.typography.titleMedium)
             bank.accounts.forEach { group ->

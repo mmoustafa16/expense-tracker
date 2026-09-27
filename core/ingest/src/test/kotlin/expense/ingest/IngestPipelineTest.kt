@@ -40,6 +40,9 @@ class EmptyRegistryTest {
     fun `financial sms is unsupported and non financial sms drops the body`() {
         val financial = pipeline.ingest(sms("OTHER", "Charged EGP 20.00 at Shop", "15/01/2026 10:00"))
         assertEquals(ParseStatus.UNSUPPORTED, financial.status)
+        assertTrue(financial.financial)
+        assertTrue(!financial.matchedProfile)
+        assertTrue(!financial.posted)
         assertEquals("Charged EGP 20.00 at Shop", financial.state.messages.single().body)
         assertTrue(financial.state.transactions.isEmpty())
         assertTrue(financial.state.accounts.isEmpty())
@@ -47,7 +50,15 @@ class EmptyRegistryTest {
 
         val chatter = pipeline.ingest(sms("OTHER", "See you at dinner", "15/01/2026 11:00"), financial.state)
         assertEquals(ParseStatus.IGNORED_NOT_BANK, chatter.status)
+        assertTrue(!chatter.financial)
         assertNull(chatter.state.messages.last().body)
+        val tally = IngestTally().add(financial).add(chatter)
+        assertEquals(2, tally.scanned)
+        assertEquals(1, tally.financial)
+        assertEquals(0, tally.matchedProfile)
+        assertEquals(1, tally.unsupported)
+        assertEquals(0, tally.parsed)
+        assertEquals(0, tally.posted)
         assertTrue(chatter.state.transactions.isEmpty())
     }
 }

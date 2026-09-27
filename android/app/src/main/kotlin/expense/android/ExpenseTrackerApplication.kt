@@ -8,6 +8,9 @@ import expense.android.storage.LedgerSession
 import expense.android.storage.LedgerSessions
 import expense.android.storage.UnlockPrompt
 import expense.android.storage.UnlockResult
+import expense.ingest.IngestTally
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Application shell. [MainActivity] shows the cold-start unlock and the local
@@ -20,6 +23,10 @@ import expense.android.storage.UnlockResult
  */
 class ExpenseTrackerApplication : Application() {
     private val session: LedgerSession by lazy { LedgerSessions.android(this) }
+    private val scanGate = InboxScanGate()
+    private val inboxScanState = MutableStateFlow(InboxScan())
+
+    val inboxScan: StateFlow<InboxScan> = inboxScanState
 
     val smsIngestion: InboundSmsSink = InboundSmsSink { messages ->
         session.accept(messages)
@@ -44,11 +51,36 @@ class ExpenseTrackerApplication : Application() {
     }
 
     fun scanInboxIfGranted() {
-        if (inboxScanned()) return
+        if (inboxScanned()) {
+            publishStoredSummary()
+            return
+        }
         val access = SmsAccess(this)
         if (!access.canReadInbox()) return
-        session.ingest(access.inboxSource())
-        getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).edit().putBoolean(INBOX_SCANNED, true).apply()
+        if (!session.isUnlocked()) return
+        if (!scanGate.tryStart()) return
+        try {
+            inboxScanState.value = InboxScan(phase = InboxScanPhase.RUNNING, tally = IngestTally())
+            session.ingest(access.inboxSource()) { tally ->
+                inboxScanState.value = InboxScan(phase = InboxScanPhase.RUNNING, tally = tally)
+            }
+            getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).edit().putBoolean(INBOX_SCANNED, true).apply()
+            scanGate.finish()
+            inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
+        } catch (_: SecurityException) {
+            scanGate.abandon()
+            inboxScanState.value = InboxScan()
+        } catch (error: RuntimeException) {
+            scanGate.abandon()
+            inboxScanState.value = InboxScan()
+            throw error
+        }
+    }
+
+    private fun publishStoredSummary() {
+        if (inboxScanState.value.phase == InboxScanPhase.RUNNING) return
+        if (!session.isUnlocked()) return
+        inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
     }
 
     private fun inboxScanned(): Boolean {

@@ -12,4 +12,5 @@ data class SearchMatch(
     val transactionId: String?,
     val smsId: String?,
     val fields: Set<SearchField>,
+    val sortAt: Long = 0,
 )

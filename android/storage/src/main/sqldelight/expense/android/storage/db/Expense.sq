@@ -334,13 +334,13 @@ FROM review_dismissal
 ORDER BY rowid;
 
 matchTransactionBody:
-SELECT t.id AS transactionId, t.sms_id AS smsId
+SELECT t.id AS transactionId, t.sms_id AS smsId, t.occurred_at AS sortAt
 FROM ledger_transaction t
 INNER JOIN stored_sms s ON s.id = t.sms_id
 WHERE s.body IS NOT NULL AND instr(lower(s.body), lower(:needle)) > 0;
 
 matchMerchant:
-SELECT t.id AS transactionId, t.sms_id AS smsId
+SELECT t.id AS transactionId, t.sms_id AS smsId, t.occurred_at AS sortAt
 FROM ledger_transaction t
 LEFT JOIN merchant m ON m.id = t.merchant_id
 WHERE instr(lower(ifnull(t.merchant_raw, '')), lower(:needle)) > 0
@@ -348,22 +348,107 @@ WHERE instr(lower(ifnull(t.merchant_raw, '')), lower(:needle)) > 0
    OR instr(lower(ifnull(m.normalized_key, '')), lower(:needle)) > 0;
 
 matchReference:
-SELECT id AS transactionId, sms_id AS smsId
+SELECT id AS transactionId, sms_id AS smsId, occurred_at AS sortAt
 FROM ledger_transaction
 WHERE reference IS NOT NULL AND instr(lower(reference), lower(:needle)) > 0;
 
 matchAmount:
-SELECT id AS transactionId, sms_id AS smsId
+SELECT id AS transactionId, sms_id AS smsId, occurred_at AS sortAt
 FROM ledger_transaction
 WHERE instr(lower(amount_text), lower(:needle)) > 0
    OR instr(CAST(amount_minor AS TEXT), :needle) > 0;
 
 matchCategory:
-SELECT id AS transactionId, sms_id AS smsId
+SELECT id AS transactionId, sms_id AS smsId, occurred_at AS sortAt
 FROM ledger_transaction
 WHERE category_id IN :categoryIds;
 
 matchSmsBody:
-SELECT id AS smsId
+SELECT id AS smsId, received_at AS sortAt
 FROM stored_sms
 WHERE body IS NOT NULL AND instr(lower(body), lower(:needle)) > 0;
+
+selectWorkingMessages:
+SELECT id, sender, body_hash AS bodyHash, provider_message_id AS providerMessageId,
+  received_at AS receivedAt, iif(body IS NULL, 0, 1) AS retained
+FROM stored_sms
+ORDER BY rowid;
+
+selectMessagesByIds:
+SELECT id, sender, body, body_hash AS bodyHash, provider_message_id AS providerMessageId, received_at AS receivedAt
+FROM stored_sms
+WHERE id IN :ids;
+
+selectTransactionsByIds:
+SELECT id, dedup_key AS dedupKey, sms_id AS smsId, institution_id AS institutionId, account_id AS accountId,
+  kind, status, amount_minor AS amountMinor, amount_currency AS amountCurrency, amount_text AS amountText,
+  direction, occurred_at AS occurredAt, occurred_civil AS occurredCivil, occurred_source AS occurredSource,
+  merchant_raw AS merchantRaw, merchant_id AS merchantId, category_id AS categoryId,
+  category_source AS categorySource, reference, balance_minor AS balanceMinor, balance_currency AS balanceCurrency,
+  foreign_minor AS foreignMinor, foreign_currency AS foreignCurrency, duplicate_of_id AS duplicateOfId,
+  linked_transaction_id AS linkedTransactionId, include_in_spend AS includeInSpend,
+  pipeline_version AS pipelineVersion, profile_version AS profileVersion,
+  installment_index AS installmentIndex, installment_count AS installmentCount, manual
+FROM ledger_transaction
+WHERE id IN :ids;
+
+deleteTransactionById:
+DELETE FROM ledger_transaction WHERE id = :id;
+
+countMessages:
+SELECT count(*) AS total FROM stored_sms;
+
+countRetainedMessages:
+SELECT count(*) AS total FROM stored_sms WHERE body IS NOT NULL;
+
+countAttemptsByStatus:
+SELECT status, count(*) AS total
+FROM parse_attempt
+GROUP BY status;
+
+countMatchedAttempts:
+SELECT count(*) AS total
+FROM parse_attempt
+WHERE profile_id IS NOT NULL OR status = 'AMBIGUOUS';
+
+countPostedTransactions:
+SELECT count(*) AS total FROM ledger_transaction WHERE manual = 0;
+
+countOpenReview:
+SELECT count(*) AS total
+FROM parse_attempt a
+INNER JOIN stored_sms s ON s.id = a.sms_id
+WHERE a.status IN ('UNSUPPORTED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+AND NOT EXISTS (
+  SELECT 1 FROM review_dismissal d
+  WHERE (
+    d.provider_message_id IS NOT NULL
+    AND d.provider_message_id != ''
+    AND d.provider_message_id = s.provider_message_id
+  ) OR (
+    d.sender = s.sender
+    AND d.body_hash = s.body_hash
+    AND d.received_at = s.received_at
+  )
+);
+
+selectOpenReviewPage:
+SELECT a.id AS attemptId, a.sms_id AS smsId, a.status AS status, a.pipeline_version AS pipelineVersion,
+  s.sender AS sender, s.body AS body, s.received_at AS receivedAt
+FROM parse_attempt a
+INNER JOIN stored_sms s ON s.id = a.sms_id
+WHERE a.status IN ('UNSUPPORTED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+AND NOT EXISTS (
+  SELECT 1 FROM review_dismissal d
+  WHERE (
+    d.provider_message_id IS NOT NULL
+    AND d.provider_message_id != ''
+    AND d.provider_message_id = s.provider_message_id
+  ) OR (
+    d.sender = s.sender
+    AND d.body_hash = s.body_hash
+    AND d.received_at = s.received_at
+  )
+)
+ORDER BY s.received_at ASC, a.id ASC
+LIMIT :limit OFFSET :offset;

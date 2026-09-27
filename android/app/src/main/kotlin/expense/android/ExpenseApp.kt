@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -19,10 +20,15 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -77,14 +83,33 @@ fun ExpenseApp(
     val nav = rememberNavController()
     val refresh = remember { MutableStateFlow(0) }
     val epoch by refresh.collectAsState()
+    val scan by application.inboxScan.collectAsState()
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         scope.launch {
             if (granted[SmsPermissions.READ_SMS] == true) {
                 withContext(Dispatchers.IO) { application.scanInboxIfGranted() }
+            } else {
+                refresh.value = refresh.value + 1
             }
+        }
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch {
+                    withContext(Dispatchers.IO) { application.scanInboxIfGranted() }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(scan.phase, scan.tally.scanned) {
+        if (scan.phase == InboxScanPhase.RUNNING || scan.phase == InboxScanPhase.FINISHED) {
             refresh.value = refresh.value + 1
         }
     }
@@ -125,10 +150,12 @@ fun ExpenseApp(
             }
         },
     ) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize()) {
+        InboxScanBanner(scan)
         NavHost(
             navController = nav,
             startDestination = Routes.Unlock,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
             composable(Routes.Unlock) {
                 ColdStartUnlockScreen(
@@ -223,6 +250,16 @@ fun ExpenseApp(
                 }
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun InboxScanBanner(scan: InboxScan) {
+    if (scan.phase == InboxScanPhase.IDLE) return
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(InboxScanText.progress(scan.tally, running = scan.phase == InboxScanPhase.RUNNING))
+        InboxScanText.unmatchedNote(scan.tally)?.let { Text(it) }
     }
 }
 

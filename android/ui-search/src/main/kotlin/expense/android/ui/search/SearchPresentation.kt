@@ -36,7 +36,7 @@ object SearchPresentation {
                 parts += match.fields.joinToString(prefix = "matched ") { it.name.lowercase() }
             }
             if (SearchField.BODY in match.fields) {
-                sms?.body?.takeIf { it.isNotBlank() }?.let { parts += it.take(BODY_EXCERPT) }
+                sms?.body?.takeIf { it.isNotBlank() }?.let { parts += excerpt(it) }
             }
             SearchHitView(
                 transactionId = match.transactionId,
@@ -46,6 +46,11 @@ object SearchPresentation {
                 subtitle = parts.joinToString(" · "),
             )
         }
+    }
+
+    fun excerpt(body: String, limit: Int = BODY_EXCERPT): String {
+        if (body.length <= limit) return body
+        return body.take(limit)
     }
 
     private const val BODY_EXCERPT: Int = 180
