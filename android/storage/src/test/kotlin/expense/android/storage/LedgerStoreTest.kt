@@ -48,6 +48,8 @@ import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicInteger
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
 
 class LedgerRepositoryTest {
     @Test
@@ -327,10 +329,194 @@ class KeystorePolicyTest {
         assertTrue(policy.biometricAllowed)
         assertTrue(policy.deviceCredentialAllowed)
         assertTrue(policy.unlockedDeviceRequired)
+        assertEquals(0, keystoreAuthenticationTimeoutSeconds(35, policy))
+        assertEquals(60, keystoreAuthenticationTimeoutSeconds(28, policy))
+        assertTrue(bindsKeystoreCipher(35))
+        assertFalse(bindsKeystoreCipher(28))
+        assertTrue(isUserAuthenticationFailure(RuntimeException("User not authenticated")))
+        assertTrue(
+            isUserAuthenticationFailure(
+                RuntimeException("Keystore operation failed", RuntimeException("User authentication required")),
+            ),
+        )
+        assertFalse(isUserAuthenticationFailure(RuntimeException("database is corrupt")))
+        assertTrue(unlockedDeviceRequirementRejected(RuntimeException("Device must be unlocked")))
+        assertTrue(unlockedDeviceRequirementRejected(RuntimeException("-66")))
+        assertFalse(unlockedDeviceRequirementRejected(RuntimeException("User not authenticated")))
         assertEquals(KeyDecision.REFUSE, keyDecision(true, keystorePresent = false, keystoreInvalid = false, wrapPresent = true))
         assertEquals(KeyDecision.REFUSE, keyDecision(true, keystorePresent = true, keystoreInvalid = true, wrapPresent = true))
         assertEquals(KeyDecision.UNWRAP, keyDecision(true, keystorePresent = true, keystoreInvalid = false, wrapPresent = true))
         assertEquals(KeyDecision.CREATE, keyDecision(false, keystorePresent = false, keystoreInvalid = false, wrapPresent = false))
+    }
+}
+
+class KeystoreUnlockCrashTest {
+    @TempDir
+    lateinit var directory: Path
+
+    @Test
+    fun `fingerprint success that cannot use the keystore key does not crash`() {
+        val databaseFile = directory.resolve("expense.db").toFile()
+        val original = byteArrayOf(4, 4, 4, 4)
+        databaseFile.writeBytes(original)
+        val opened = AtomicInteger()
+        val session = LedgerSession(
+            databaseFile = databaseFile,
+            vault = DatabaseKeyVault { throw UserAuthRequiredException() },
+            openDriver = { _, _ ->
+                opened.incrementAndGet()
+                error("driver must not open")
+            },
+        )
+        val result = unlock(session) { onSuccess, _ -> onSuccess() }
+        assertEquals(UnlockResult.AuthenticationFailed, result)
+        assertEquals(0, opened.get())
+        assertArrayEquals(original, databaseFile.readBytes())
+        assertFalse(session.isUnlocked())
+    }
+
+    @Test
+    fun `creating a key reports auth failure instead of throwing and does not create a database`() {
+        val databaseFile = directory.resolve("expense.db").toFile()
+        val wrapFile = directory.resolve("expense.db.wrap").toFile()
+        val box = MemoryBox(alias = false, invalid = false).apply {
+            encryptFailure = UserAuthRequiredException()
+        }
+        val vault = WrappedDatabaseKey(databaseFile, wrapFile, box) { byteArrayOf(9, 9) }
+        assertEquals(KeyMaterial.AuthenticationRequired, vault.readOrCreate(databaseExists = false))
+        assertFalse(databaseFile.exists())
+        assertFalse(wrapFile.exists())
+    }
+
+    @Test
+    fun `authorized cipher wraps the passphrase without the unauthenticated encrypt path`() {
+        val databaseFile = directory.resolve("expense.db").toFile()
+        val wrapFile = directory.resolve("expense.db.wrap").toFile()
+        val opened = AtomicInteger()
+        var unauthenticatedEncrypts = 0
+        val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").also { it.init(Cipher.ENCRYPT_MODE, key) }
+        val box = object : SecretKeyBox {
+            override fun containsAlias(): Boolean = false
+            override fun deleteAlias() = Unit
+            override fun generate() = Unit
+            override fun encrypt(plaintext: ByteArray): ByteArray {
+                unauthenticatedEncrypts++
+                throw UserAuthRequiredException()
+            }
+            override fun decrypt(wrapped: ByteArray): ByteArray = error("decrypt is not used")
+            override fun openEncrypt(plaintext: ByteArray): BoxOperation {
+                val copy = plaintext.copyOf()
+                return BoxOperation.Authorize(cipher) { authed ->
+                    val payload = authed.doFinal(copy)
+                    authed.iv + payload
+                }
+            }
+        }
+        val session = LedgerSession(
+            databaseFile = databaseFile,
+            vault = WrappedDatabaseKey(databaseFile, wrapFile, box) { byteArrayOf(7, 8, 9) },
+            openDriver = { file, _ ->
+                opened.incrementAndGet()
+                jdbc(file)
+            },
+        )
+        val result = unlock(session, ImmediateCipherPrompt(succeed = true))
+        assertEquals(UnlockResult.Ready, result)
+        assertEquals(0, unauthenticatedEncrypts)
+        assertTrue(session.isUnlocked())
+        assertTrue(wrapFile.length() > 12)
+        assertFalse(databaseFile.exists())
+        assertEquals(0, opened.get())
+    }
+
+    @Test
+    fun `cancelled cipher prompt leaves an existing database and wrap untouched`() {
+        val databaseFile = directory.resolve("expense.db").toFile()
+        val wrapFile = directory.resolve("expense.db.wrap").toFile()
+        val original = byteArrayOf(1, 2, 3)
+        val wrapped = byteArrayOf(8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9)
+        databaseFile.writeBytes(original)
+        wrapFile.writeBytes(wrapped)
+        var finished = 0
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").also {
+            it.init(Cipher.ENCRYPT_MODE, KeyGenerator.getInstance("AES").apply { init(256) }.generateKey())
+        }
+        val box = object : SecretKeyBox {
+            override fun containsAlias(): Boolean = true
+            override fun deleteAlias() = error("alias must stay")
+            override fun generate() = error("key must stay")
+            override fun encrypt(plaintext: ByteArray): ByteArray = error("encrypt must not run")
+            override fun decrypt(wrappedBytes: ByteArray): ByteArray = error("decrypt must not run")
+            override fun openDecrypt(wrappedBytes: ByteArray): BoxOperation {
+                return BoxOperation.Authorize(cipher) {
+                    finished++
+                    throw UserAuthRequiredException()
+                }
+            }
+        }
+        val session = LedgerSession(
+            databaseFile = databaseFile,
+            vault = WrappedDatabaseKey(databaseFile, wrapFile, box),
+            openDriver = { _, _ -> error("driver must not open") },
+        )
+        assertEquals(UnlockResult.AuthenticationFailed, unlock(session, ImmediateCipherPrompt(succeed = false)))
+        assertEquals(0, finished)
+        assertArrayEquals(original, databaseFile.readBytes())
+        assertArrayEquals(wrapped, wrapFile.readBytes())
+        assertFalse(session.isUnlocked())
+    }
+
+    @Test
+    fun `authorized unwrap that still requires auth does not replace the database`() {
+        val databaseFile = directory.resolve("expense.db").toFile()
+        val wrapFile = directory.resolve("expense.db.wrap").toFile()
+        val original = byteArrayOf(3, 2, 1)
+        val wrapped = byteArrayOf(4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5)
+        databaseFile.writeBytes(original)
+        wrapFile.writeBytes(wrapped)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").also {
+            it.init(Cipher.DECRYPT_MODE, KeyGenerator.getInstance("AES").apply { init(256) }.generateKey(), javax.crypto.spec.GCMParameterSpec(128, ByteArray(12)))
+        }
+        val box = object : SecretKeyBox {
+            override fun containsAlias(): Boolean = true
+            override fun deleteAlias() = error("alias must stay")
+            override fun generate() = error("key must stay")
+            override fun encrypt(plaintext: ByteArray): ByteArray = throw UserAuthRequiredException()
+            override fun decrypt(wrappedBytes: ByteArray): ByteArray = throw UserAuthRequiredException()
+            override fun openDecrypt(wrappedBytes: ByteArray): BoxOperation {
+                return BoxOperation.Authorize(cipher) { throw UserAuthRequiredException() }
+            }
+        }
+        val session = LedgerSession(
+            databaseFile = databaseFile,
+            vault = WrappedDatabaseKey(databaseFile, wrapFile, box),
+            openDriver = { _, _ -> error("driver must not open") },
+        )
+        assertEquals(UnlockResult.AuthenticationFailed, unlock(session, ImmediateCipherPrompt(succeed = true)))
+        assertArrayEquals(original, databaseFile.readBytes())
+        assertArrayEquals(wrapped, wrapFile.readBytes())
+        assertFalse(session.isUnlocked())
+    }
+
+    private fun unlock(session: LedgerSession, prompt: UnlockPrompt): UnlockResult {
+        var result: UnlockResult = UnlockResult.KeyUnavailable
+        session.unlock(prompt) { result = it }
+        return result
+    }
+}
+
+private class ImmediateCipherPrompt(
+    private val succeed: Boolean,
+) : UnlockPrompt {
+    override fun bindsCipher(): Boolean = true
+
+    override fun authorize(cipher: Cipher, onSuccess: (Cipher) -> Unit, onFailure: () -> Unit) {
+        if (succeed) onSuccess(cipher) else onFailure()
+    }
+
+    override fun authenticate(onSuccess: () -> Unit, onFailure: () -> Unit) {
+        if (succeed) onSuccess() else onFailure()
     }
 }
 
@@ -366,6 +552,7 @@ private class MemoryBox(
 ) : SecretKeyBox {
     var deleted: Int = 0
     var generated: Int = 0
+    var encryptFailure: Exception? = null
 
     override fun containsAlias(): Boolean = alias
 
@@ -379,7 +566,10 @@ private class MemoryBox(
         alias = true
     }
 
-    override fun encrypt(plaintext: ByteArray): ByteArray = plaintext.copyOf()
+    override fun encrypt(plaintext: ByteArray): ByteArray {
+        encryptFailure?.let { throw it }
+        return plaintext.copyOf()
+    }
 
     override fun decrypt(wrapped: ByteArray): ByteArray {
         if (invalid) throw KeyUnrecoverableException()

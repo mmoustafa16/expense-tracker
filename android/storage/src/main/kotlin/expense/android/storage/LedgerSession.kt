@@ -17,6 +17,7 @@ import expense.ledger.ReviewDismissals
 import expense.sms.InboundSms
 import expense.sms.SmsSource
 import java.io.File
+import javax.crypto.Cipher
 
 sealed class UnlockResult {
     data object Ready : UnlockResult()
@@ -28,6 +29,13 @@ sealed class UnlockResult {
 
 fun interface UnlockPrompt {
     fun authenticate(onSuccess: () -> Unit, onFailure: () -> Unit)
+
+    /** True when this prompt can authorize a keystore cipher. */
+    fun bindsCipher(): Boolean = false
+
+    fun authorize(cipher: Cipher, onSuccess: (Cipher) -> Unit, onFailure: () -> Unit) {
+        authenticate(onSuccess = { onSuccess(cipher) }, onFailure = onFailure)
+    }
 }
 
 class DatabaseLockedException : IllegalStateException("ledger database is locked")
@@ -58,26 +66,65 @@ class LedgerSession(
                 return
             }
         }
-        prompt.authenticate(
-            onSuccess = {
-                synchronized(lock) {
-                    if (passphrase != null) {
-                        onResult(UnlockResult.Ready)
-                        return@synchronized
-                    }
-                    when (val material = vault.readOrCreate(databaseFile.exists())) {
-                        is KeyMaterial.Available -> {
-                            passphrase = material.passphrase.copyOf()
-                            flushLocked()
-                            onResult(UnlockResult.Ready)
-                        }
-                        KeyMaterial.Unavailable -> onResult(UnlockResult.KeyUnavailable)
-                        KeyMaterial.AuthenticationRequired -> onResult(UnlockResult.AuthenticationFailed)
-                    }
+        var delivered = false
+        fun deliver(result: UnlockResult) {
+            if (delivered) return
+            delivered = true
+            onResult(result)
+        }
+        fun accept(material: KeyMaterial) {
+            synchronized(lock) {
+                if (passphrase != null) {
+                    deliver(UnlockResult.Ready)
+                    return
                 }
-            },
-            onFailure = { onResult(UnlockResult.AuthenticationFailed) },
-        )
+                when (material) {
+                    is KeyMaterial.Available -> {
+                        passphrase = material.passphrase.copyOf()
+                        flushLocked()
+                        deliver(UnlockResult.Ready)
+                    }
+                    KeyMaterial.Unavailable -> deliver(UnlockResult.KeyUnavailable)
+                    KeyMaterial.AuthenticationRequired -> deliver(UnlockResult.AuthenticationFailed)
+                }
+            }
+        }
+        fun acceptSafely(resolve: () -> KeyMaterial) {
+            try {
+                accept(resolve())
+            } catch (_: UserAuthRequiredException) {
+                deliver(UnlockResult.AuthenticationFailed)
+            } catch (_: KeyUnrecoverableException) {
+                deliver(UnlockResult.KeyUnavailable)
+            }
+        }
+        if (!prompt.bindsCipher()) {
+            prompt.authenticate(
+                onSuccess = { acceptSafely { vault.readOrCreate(databaseFile.exists()) } },
+                onFailure = { deliver(UnlockResult.AuthenticationFailed) },
+            )
+            return
+        }
+        val challenge = try {
+            vault.challenge(databaseFile.exists())
+        } catch (_: UserAuthRequiredException) {
+            deliver(UnlockResult.AuthenticationFailed)
+            return
+        } catch (_: KeyUnrecoverableException) {
+            deliver(UnlockResult.KeyUnavailable)
+            return
+        }
+        when (challenge) {
+            is KeyChallenge.Deferred -> prompt.authenticate(
+                onSuccess = { acceptSafely(challenge.resolve) },
+                onFailure = { deliver(UnlockResult.AuthenticationFailed) },
+            )
+            is KeyChallenge.NeedsCipher -> prompt.authorize(
+                cipher = challenge.cipher,
+                onSuccess = { authed -> acceptSafely { challenge.finish(authed) } },
+                onFailure = { deliver(UnlockResult.AuthenticationFailed) },
+            )
+        }
     }
 
     fun accept(messages: List<InboundSms>) {
