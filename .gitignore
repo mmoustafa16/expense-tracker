@@ -4,3 +4,8 @@ build/
 *.iml
 .idea/
 out/
+local.properties
+*.apk
+*.aab
+.cxx/
+captures/
