@@ -24,6 +24,37 @@ fun interface BankEvidenceCollector {
     fun collect(message: SmsText): List<MatchedEvidence>
 }
 
+enum class SenderAddressShape {
+    BLANK,
+    SHORT_CODE,
+    LONG_NUMBER,
+    ALPHANUMERIC_ID,
+    OTHER,
+    ;
+
+    /** Closed label for the on-device sender diagnostic. */
+    fun diagnosticLabel(): String = when (this) {
+        SHORT_CODE -> "short code"
+        LONG_NUMBER -> "long numeric"
+        ALPHANUMERIC_ID -> "alphanumeric"
+        BLANK, OTHER -> "other"
+    }
+}
+
+/** Address shape only. This does not read the message body. */
+fun senderAddressShape(sender: String): SenderAddressShape {
+    val trimmed = sender.trim()
+    if (trimmed.isEmpty()) return SenderAddressShape.BLANK
+    return when {
+        trimmed.all { it.isDigit() } && trimmed.length <= SHORT_CODE_LENGTH -> SenderAddressShape.SHORT_CODE
+        trimmed.all { it.isDigit() } -> SenderAddressShape.LONG_NUMBER
+        trimmed.all { it.isLetterOrDigit() || it == '-' } -> SenderAddressShape.ALPHANUMERIC_ID
+        else -> SenderAddressShape.OTHER
+    }
+}
+
+private const val SHORT_CODE_LENGTH: Int = 6
+
 /**
  * Sender-address and message-structure observations.
  * Shape and structure labels are not bank identities.
@@ -31,26 +62,16 @@ fun interface BankEvidenceCollector {
 class StructuralBankEvidenceCollector : BankEvidenceCollector {
     override fun collect(message: SmsText): List<MatchedEvidence> {
         val sender = message.sender.trim()
+        val shape = senderAddressShape(sender)
         val evidence = mutableListOf<MatchedEvidence>()
-        if (sender.isEmpty()) {
-            evidence += MatchedEvidence(EvidenceKind.SENDER_SHAPE, SenderShape.BLANK.name)
-        } else {
+        if (shape != SenderAddressShape.BLANK) {
             evidence += MatchedEvidence(EvidenceKind.SENDER_ALIAS, sender)
-            evidence += MatchedEvidence(EvidenceKind.SENDER_SHAPE, shapeOf(sender).name)
         }
+        evidence += MatchedEvidence(EvidenceKind.SENDER_SHAPE, shape.name)
         structureOf(message.body).forEach { label ->
             evidence += MatchedEvidence(EvidenceKind.MESSAGE_STRUCTURE, label)
         }
         return evidence
-    }
-
-    private fun shapeOf(sender: String): SenderShape {
-        return when {
-            sender.all { it.isDigit() } && sender.length <= SHORT_CODE_LENGTH -> SenderShape.SHORT_CODE
-            sender.all { it.isDigit() } -> SenderShape.LONG_NUMBER
-            sender.all { it.isLetterOrDigit() || it == '-' } -> SenderShape.ALPHANUMERIC_ID
-            else -> SenderShape.OTHER
-        }
     }
 
     private fun structureOf(body: String): List<String> {
@@ -61,14 +82,6 @@ class StructuralBankEvidenceCollector : BankEvidenceCollector {
         return labels
     }
 
-    private enum class SenderShape {
-        BLANK,
-        SHORT_CODE,
-        LONG_NUMBER,
-        ALPHANUMERIC_ID,
-        OTHER,
-    }
-
     private enum class MessageStructure {
         EMPTY,
         PROSE,
@@ -77,7 +90,6 @@ class StructuralBankEvidenceCollector : BankEvidenceCollector {
     }
 
     private companion object {
-        const val SHORT_CODE_LENGTH: Int = 6
         val amountPresent = Regex("""(?i)\b(EGP|USD|EUR|GBP|LE)\b|جنيه|دولار|يورو""")
     }
 }

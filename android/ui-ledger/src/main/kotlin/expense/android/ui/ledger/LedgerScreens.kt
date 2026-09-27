@@ -70,6 +70,7 @@ fun LedgerRoute(
     onOpenAccount: (String) -> Unit,
     onOpenTransaction: (String) -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenSenderDiagnostic: () -> Unit,
 ) {
     var tree by remember { mutableStateOf<LedgerTree?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -86,7 +87,16 @@ fun LedgerRoute(
         CircularProgressIndicator(Modifier.padding(24.dp))
         return
     }
-    LedgerScreen(loaded, message, scan, onOpenSearch, onOpenAccount, onOpenTransaction, onOpenCategories)
+    LedgerScreen(
+        loaded,
+        message,
+        scan,
+        onOpenSearch,
+        onOpenAccount,
+        onOpenTransaction,
+        onOpenCategories,
+        onOpenSenderDiagnostic,
+    )
 }
 
 @Composable
@@ -98,6 +108,7 @@ fun LedgerScreen(
     onOpenAccount: (String) -> Unit,
     onOpenTransaction: (String) -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenSenderDiagnostic: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -118,6 +129,7 @@ fun LedgerScreen(
         }
         if (scan != null) ScanSummaryCard(scan)
         TextButton(onClick = onOpenCategories) { Text("Categories") }
+        TextButton(onClick = onOpenSenderDiagnostic) { Text("Sender diagnostic") }
         message?.let { Text(it) }
         if (tree.banks.isEmpty()) {
             Text("No banks or transactions yet.")

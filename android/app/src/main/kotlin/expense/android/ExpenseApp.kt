@@ -62,6 +62,7 @@ private object Routes {
     const val Account = "ledger/account/{accountId}"
     const val Transaction = "ledger/transaction/{transactionId}"
     const val Categories = "ledger/categories"
+    const val SenderDiagnostic = "ledger/sender-diagnostic"
     const val Search = "search"
     const val Analytics = "analytics"
     const val AnalyticsTransaction = "analytics/transaction/{transactionId}"
@@ -194,7 +195,13 @@ fun ExpenseApp(
                     onOpenAccount = { nav.navigate(Routes.account(it)) },
                     onOpenTransaction = { nav.navigate(Routes.transaction(it)) },
                     onOpenCategories = { nav.navigate(Routes.Categories) },
+                    onOpenSenderDiagnostic = { nav.navigate(Routes.SenderDiagnostic) },
                 )
+            }
+            composable(Routes.SenderDiagnostic) {
+                NestedPage(title = "Sender diagnostic", onBack = { nav.popBackStack() }) {
+                    SenderDiagnosticRoute(session = application.ledger())
+                }
             }
             composable(
                 route = Routes.Account,
