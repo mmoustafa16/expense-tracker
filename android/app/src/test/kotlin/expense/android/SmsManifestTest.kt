@@ -33,4 +33,12 @@ class SmsManifestTest {
         assertFalse(manifest.contains("android:priority"))
         assertFalse(manifest.contains("SMS_DELIVER"))
     }
+
+    @Test
+    fun `the launcher activity is the local ledger shell`() {
+        assertTrue(manifest.contains("""android:name=".MainActivity""""))
+        assertTrue(manifest.contains("""android.intent.action.MAIN"""))
+        assertTrue(manifest.contains("""android.intent.category.LAUNCHER"""))
+        assertFalse(manifest.contains("android.permission.INTERNET"))
+    }
 }

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -26,6 +27,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     testOptions {
         unitTests.all {
             it.useJUnitPlatform()
@@ -42,5 +47,18 @@ kotlin {
 dependencies {
     implementation(project(":android:capture"))
     implementation(project(":android:storage"))
+    implementation(project(":android:ui-unlock"))
+    implementation(project(":android:ui-review"))
+    implementation(project(":android:ui-ledger"))
+    implementation(project(":android:ui-search"))
+    implementation(project(":android:ui-analytics"))
+    implementation(libs.activity.compose)
+    implementation(libs.navigation.compose)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.icons)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.sqldelight.sqlite.driver)
 }
