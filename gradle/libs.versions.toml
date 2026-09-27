@@ -6,6 +6,10 @@ sqldelight = "2.0.2"
 sqlcipher = "4.6.1"
 androidxSqlite = "2.4.0"
 biometric = "1.1.0"
+composeBom = "2024.10.01"
+activityCompose = "1.9.3"
+navigationCompose = "2.8.3"
+coroutines = "1.9.0"
 
 [libraries]
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
@@ -14,10 +18,18 @@ sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", versi
 sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
 androidx-sqlite = { module = "androidx.sqlite:sqlite", version.ref = "androidxSqlite" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-icons = { module = "androidx.compose.material:material-icons-core" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

@@ -38,5 +38,11 @@ include(
     ":core:ingest",
     ":android:capture",
     ":android:storage",
+    ":android:ui-common",
+    ":android:ui-unlock",
+    ":android:ui-review",
+    ":android:ui-ledger",
+    ":android:ui-search",
+    ":android:ui-analytics",
     ":android:app",
 )

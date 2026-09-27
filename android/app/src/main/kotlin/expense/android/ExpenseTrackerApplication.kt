@@ -3,15 +3,17 @@ package expense.android
 import android.app.Application
 import expense.android.sms.InboundSmsSink
 import expense.android.sms.SmsAccess
+import expense.android.sms.SmsPermissions
 import expense.android.storage.LedgerSession
 import expense.android.storage.LedgerSessions
 import expense.android.storage.UnlockPrompt
 import expense.android.storage.UnlockResult
 
 /**
- * Application shell. There is no activity yet. Incoming SMS is delivered to
- * [IncomingSmsReceiver], which calls [smsIngestion]. Inbox scans are explicit
- * because they require [expense.android.sms.SmsPermissions.READ_SMS].
+ * Application shell. [MainActivity] shows the cold-start unlock and the local
+ * ledger screens. Incoming SMS is delivered to [IncomingSmsReceiver], which
+ * calls [smsIngestion]. The first granted inbox read scans the available SMS
+ * inbox. Later messages arrive through the receiver.
  *
  * The encrypted ledger stays locked until [unlockLedger]. Messages accepted
  * before that stay in process memory and are written after the cold-start unlock.
@@ -23,11 +25,38 @@ class ExpenseTrackerApplication : Application() {
         session.accept(messages)
     }
 
+    fun ledger(): LedgerSession = session
+
     fun ingestInbox() {
         session.ingest(SmsAccess(this).inboxSource())
     }
 
     fun unlockLedger(prompt: UnlockPrompt, onResult: (UnlockResult) -> Unit) {
         session.unlock(prompt, onResult)
+    }
+
+    fun missingSmsPermissions(): Set<String> {
+        val access = SmsAccess(this)
+        return buildSet {
+            if (!access.canReadInbox()) add(SmsPermissions.READ_SMS)
+            if (!access.canReceiveSms()) add(SmsPermissions.RECEIVE_SMS)
+        }
+    }
+
+    fun scanInboxIfGranted() {
+        if (inboxScanned()) return
+        val access = SmsAccess(this)
+        if (!access.canReadInbox()) return
+        session.ingest(access.inboxSource())
+        getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).edit().putBoolean(INBOX_SCANNED, true).apply()
+    }
+
+    private fun inboxScanned(): Boolean {
+        return getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).getBoolean(INBOX_SCANNED, false)
+    }
+
+    private companion object {
+        const val SETUP_PREFS = "expense_setup"
+        const val INBOX_SCANNED = "inbox_scanned"
     }
 }
