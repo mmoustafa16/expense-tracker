@@ -1,5 +1,6 @@
 package expense.ledger
 
+import expense.categories.Category
 import expense.categories.CategoryRule
 import expense.merchants.Merchant
 import expense.merchants.MerchantAlias
@@ -45,8 +46,14 @@ data class LedgerState(
     val categoryRules: List<CategoryRule> = emptyList(),
     val corrections: List<Correction> = emptyList(),
     val possibleDuplicates: List<PossibleDuplicate> = emptyList(),
+    val categories: List<Category> = emptyList(),
+    val reviewDismissals: List<ReviewDismissal> = emptyList(),
 ) {
-    fun reviewQueue(): List<ParseAttempt> = attempts.filter { it.status.needsReview() }
+    fun reviewQueue(): List<ParseAttempt> {
+        return attempts.filter { attempt ->
+            attempt.status.needsReview() && !ReviewDismissals.isDismissed(this, attempt)
+        }
+    }
 
     companion object {
         fun empty(): LedgerState = LedgerState()

@@ -17,6 +17,7 @@ enum class TransactionStatus {
 enum class OccurredSource {
     SMS_FIELD,
     RECEIVED_AT,
+    MANUAL,
 }
 
 data class Transaction(
@@ -46,4 +47,5 @@ data class Transaction(
     val profileVersion: String,
     val installmentIndex: Int?,
     val installmentCount: Int?,
+    val manual: Boolean = false,
 )

@@ -3,8 +3,10 @@ package expense.ingest
 import expense.categories.RuleSource
 import expense.ledger.Correction
 import expense.ledger.DuplicateMatcher
+import expense.ledger.EvidenceRole
 import expense.ledger.LedgerState
 import expense.ledger.StoredSms
+import expense.ledger.TransactionEvidence
 import expense.merchants.AliasSource
 import expense.parse.BankMatcher
 import expense.parse.BankProfile
@@ -81,8 +83,14 @@ class IngestPipeline(
      */
     fun reparse(state: LedgerState): LedgerState {
         val messages = state.messages.sortedWith(compareBy({ it.receivedAt }, { it.id }))
+        val manual = state.transactions.filter { it.manual }
+        val manualMerchantIds = manual.mapNotNull { it.merchantId }.toSet()
         var cursor = LedgerState(
+            accounts = state.accounts,
+            merchants = state.merchants.filter { it.id in manualMerchantIds },
             corrections = state.corrections,
+            categories = state.categories,
+            reviewDismissals = state.reviewDismissals,
             categoryRules = state.categoryRules.filter { it.source == RuleSource.SYSTEM },
             aliases = state.aliases.filter { it.source == AliasSource.SYSTEM },
         )
@@ -102,7 +110,49 @@ class IngestPipeline(
                 cursor,
             ).state
         }
-        return cursor
+        if (manual.isEmpty()) return cursor
+        return CorrectionOverlay.apply(
+            restoreManual(cursor, messages, manual),
+            ids,
+        )
+    }
+
+    private fun restoreManual(
+        rebuilt: LedgerState,
+        originalMessages: List<StoredSms>,
+        manual: List<expense.ledger.Transaction>,
+    ): LedgerState {
+        val newByIdentity = rebuilt.messages.groupBy { it.replayIdentity() }
+        var transactions = rebuilt.transactions
+        var evidence = rebuilt.evidence
+        for (tx in manual) {
+            if (transactions.any { it.dedupKey == tx.dedupKey }) continue
+            val oldSms = originalMessages.find { it.id == tx.smsId }
+            val newSmsId = if (oldSms == null) {
+                tx.smsId
+            } else {
+                newByIdentity[oldSms.replayIdentity()]?.firstOrNull()?.id ?: tx.smsId
+            }
+            var keptId = tx.id
+            if (transactions.any { it.id == keptId } || rebuilt.messages.any { it.id == keptId }) {
+                keptId = ids.newId()
+            }
+            val kept = tx.copy(id = keptId, smsId = newSmsId)
+            transactions = transactions + kept
+            val linked = rebuilt.messages.any { it.id == newSmsId }
+            val evidenceExists = evidence.any {
+                it.transactionId == kept.id && it.smsId == newSmsId && it.role == EvidenceRole.PRIMARY
+            }
+            if (linked && !evidenceExists) {
+                evidence = evidence + TransactionEvidence(
+                    id = ids.newId(),
+                    transactionId = kept.id,
+                    smsId = newSmsId,
+                    role = EvidenceRole.PRIMARY,
+                )
+            }
+        }
+        return rebuilt.copy(transactions = transactions, evidence = evidence)
     }
 
     private fun interpret(sms: InboundSms): Interpretation {
@@ -148,6 +198,11 @@ class IngestPipeline(
             incoming.body.take(PipelineMetadata.MAX_BODY_CHARS)
         }
         return incoming.copy(sender = sender, body = body)
+    }
+
+    private fun StoredSms.replayIdentity(): String {
+        return listOf(sender, bodyHash, receivedAt.toEpochMilli().toString(), providerMessageId.orEmpty())
+            .joinToString("|")
     }
 
     private fun storedCopy(sms: InboundSms, hash: String, retainBody: Boolean): StoredSms {

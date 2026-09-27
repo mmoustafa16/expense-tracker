@@ -9,4 +9,5 @@ data class Account(
     val kind: AccountKind,
     val mask: String,
     val currency: Currency,
+    val displayName: String = "",
 )
