@@ -368,7 +368,7 @@ class DatabaseRetentionTest {
         val opened = AtomicInteger()
         var prompts = 0
         val session = session(databaseFile, ScriptedVault(KeyMaterial.Available(byteArrayOf(1, 2, 3))), opened)
-        val financial = InboundSms("LAB", "Charged EGP 20.00 at Shop", "11", Instant.parse("2026-05-01T07:00:00Z"))
+        val financial = InboundSms("LAB", "Debited EGP 20.00 for Shop", "11", Instant.parse("2026-05-01T07:00:00Z"))
         val ignored = InboundSms("NEWS", "hello there", "12", Instant.parse("2026-05-01T08:00:00Z"))
         session.accept(listOf(financial))
         assertEquals(0, opened.get())
@@ -382,14 +382,14 @@ class DatabaseRetentionTest {
         assertEquals(1, prompts)
         assertEquals(1, opened.get())
         val state = session.load()
-        assertEquals("Charged EGP 20.00 at Shop", state.messages.first { it.providerMessageId == "11" }.body)
+        assertEquals("Debited EGP 20.00 for Shop", state.messages.first { it.providerMessageId == "11" }.body)
         assertEquals(null, state.messages.first { it.providerMessageId == "12" }.body)
         assertEquals(1, state.reviewQueue().size)
         val renamed = session.addCategory(NewCategory("pets", null, "Pets", "حيوانات", "pets", 200))
         assertEquals("pets", renamed.categories.single().id)
         session.dismissReview(state.reviewQueue().single().id)
         assertTrue(session.load().reviewQueue().isEmpty())
-        assertEquals("Charged EGP 20.00 at Shop", session.load().messages.first { it.providerMessageId == "11" }.body)
+        assertEquals("Debited EGP 20.00 for Shop", session.load().messages.first { it.providerMessageId == "11" }.body)
         val hits = session.search("Shop")
         assertTrue(hits.any { SearchField.BODY in it.fields })
     }
@@ -442,7 +442,7 @@ class DatabaseRetentionTest {
                 val items = (0 until total).map { index ->
                     InboundSms(
                         sender = "LAB",
-                        body = "Charged EGP $index at Shop",
+                        body = "Debited EGP $index for Shop",
                         providerMessageId = index.toString(),
                         receivedAt = Instant.EPOCH.plusSeconds(index.toLong()),
                     )
@@ -455,7 +455,7 @@ class DatabaseRetentionTest {
         val loaded = session.load()
         assertEquals(total + 1, loaded.messages.size)
         assertEquals(
-            (0 until total).map { "Charged EGP $it at Shop" },
+            (0 until total).map { "Debited EGP $it for Shop" },
             loaded.messages.filter { it.body != null }.map { it.body },
         )
         assertTrue(loaded.transactions.isEmpty())
@@ -463,11 +463,11 @@ class DatabaseRetentionTest {
         val first = session.reviewWindow(0, 20)
         assertEquals(20, first.rows.size)
         assertEquals(total, first.total)
-        assertEquals("Charged EGP 0 at Shop", first.rows.first().body)
+        assertEquals("Debited EGP 0 for Shop", first.rows.first().body)
         val second = session.reviewWindow(40, 20)
         assertEquals(5, second.rows.size)
-        assertEquals("Charged EGP 44 at Shop", second.rows.last().body)
-        assertTrue(second.rows.none { it.body == "Charged EGP 0 at Shop" })
+        assertEquals("Debited EGP 44 for Shop", second.rows.last().body)
+        assertTrue(second.rows.none { it.body == "Debited EGP 0 for Shop" })
         val tally = session.storedTally()
         assertEquals(total + 1, tally.scanned)
         assertEquals(total, tally.financial)

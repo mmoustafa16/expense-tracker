@@ -38,12 +38,12 @@ class EmptyRegistryTest {
 
     @Test
     fun `financial sms is unsupported and non financial sms drops the body`() {
-        val financial = pipeline.ingest(sms("OTHER", "Charged EGP 20.00 at Shop", "15/01/2026 10:00"))
+        val financial = pipeline.ingest(sms("OTHER", "Debited EGP 20.00 for Shop", "15/01/2026 10:00"))
         assertEquals(ParseStatus.UNSUPPORTED, financial.status)
         assertTrue(financial.financial)
         assertTrue(!financial.matchedProfile)
         assertTrue(!financial.posted)
-        assertEquals("Charged EGP 20.00 at Shop", financial.state.messages.single().body)
+        assertEquals("Debited EGP 20.00 for Shop", financial.state.messages.single().body)
         assertTrue(financial.state.transactions.isEmpty())
         assertTrue(financial.state.accounts.isEmpty())
         assertEquals(listOf(financial.attempt), financial.state.reviewQueue())
@@ -88,13 +88,13 @@ class SyntheticPipelineTest {
     @Test
     fun `known sender without a template stays unsupported and creates no account`() {
         val result = pipeline().ingest(
-            sms(SyntheticBankProfile.SENDER, "Charged EGP 50.00 at Shop", "15/01/2026 10:00"),
+            sms(SyntheticBankProfile.SENDER, "Debited EGP 50.00 for Shop", "15/01/2026 10:00"),
         )
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
         assertEquals(SyntheticBankProfile.ID, result.attempt?.profileId)
         assertTrue(result.state.transactions.isEmpty())
         assertTrue(result.state.accounts.isEmpty())
-        assertEquals("Charged EGP 50.00 at Shop", result.state.messages.single().body)
+        assertEquals("Debited EGP 50.00 for Shop", result.state.messages.single().body)
     }
 
     @Test

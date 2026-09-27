@@ -40,7 +40,7 @@ class UiSessionTest {
             listOf(
                 InboundSms(
                     sender = "LAB",
-                    body = "Charged EGP 20.00 at Shop",
+                    body = "Debited EGP 20.00 for Shop",
                     providerMessageId = "1",
                     receivedAt = Instant.parse("2026-05-01T07:00:00Z"),
                 ),
@@ -117,6 +117,28 @@ class UiSessionTest {
         val waiting = ReviewSession.rows(session).single()
         assertTrue(ReviewSession.dismiss(session, waiting.attemptId).isEmpty())
         assertEquals("Paid EGP 5.00 somewhere", session.load().messages.last().body)
+    }
+
+    @Test
+    fun `a clear purchase reaches the ledger and analytics without a bank template`() {
+        val session = openSession(File(directory.toFile(), "purchase.db"))
+        session.accept(
+            listOf(
+                InboundSms(
+                    sender = "SHOP",
+                    body = "Your card was charged EGP 120.50 at Talabat on 02/03/2026 09:15",
+                    providerMessageId = "c1",
+                    receivedAt = Instant.parse("2026-03-02T07:15:00Z"),
+                ),
+            ),
+        )
+        val posted = session.load()
+        val transaction = posted.transactions.single()
+        assertEquals(false, transaction.manual)
+        assertEquals("Talabat", transaction.merchantRaw)
+        assertTrue(posted.reviewQueue().isEmpty())
+        val report = AnalyticsSession.report(session, AnalyticsSlice(month = YearMonth.of(2026, 3)))
+        assertEquals(12050L, report.totals.single().signedMinor)
     }
 
     private fun openSession(database: File): LedgerSession {

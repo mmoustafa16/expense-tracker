@@ -37,9 +37,9 @@ class ReviewClassificationTest {
 
     @Test
     fun `a probable transaction without a verified profile stays in review and is not posted`() {
-        val result = pipeline.ingest(sms("OTHER", "Charged EGP 20.00 at Shop", 0))
+        val result = pipeline.ingest(sms("OTHER", "Debited EGP 20.00 for Shop", 0))
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
-        assertEquals("Charged EGP 20.00 at Shop", result.state.messages.single().body)
+        assertEquals("Debited EGP 20.00 for Shop", result.state.messages.single().body)
         assertEquals(1, result.state.reviewQueue().size)
         assertTrue(result.state.transactions.isEmpty())
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())

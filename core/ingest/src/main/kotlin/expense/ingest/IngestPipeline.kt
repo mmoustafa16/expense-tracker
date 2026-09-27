@@ -8,15 +8,25 @@ import expense.ledger.LedgerState
 import expense.ledger.StoredSms
 import expense.ledger.TransactionEvidence
 import expense.merchants.AliasSource
+import expense.intelligence.AmountRole
+import expense.intelligence.ClassificationDecision
+import expense.intelligence.FinancialSmsIntelligence
+import expense.intelligence.MoneyDirection
+import expense.intelligence.RegisteredSender
+import expense.intelligence.SmsText
+import expense.intelligence.TransactionClass
+import expense.parse.AccountKind
 import expense.parse.BankMatcher
 import expense.parse.BankProfile
 import expense.parse.BankRegistry
+import expense.parse.Direction
 import expense.parse.Extraction
-import expense.parse.FinancialSignal
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
 import expense.parse.TemplateExecution
 import expense.parse.TemplateRunner
+import expense.parse.TransactionCandidate
+import expense.parse.TransactionKind
 import expense.sms.BodyHash
 import expense.sms.InboundSms
 import expense.sms.SmsSource
@@ -28,13 +38,17 @@ import expense.sms.SmsSource
 class IngestPipeline(
     private val registry: BankRegistry = BankRegistry.EMPTY,
     private val ids: IdGenerator = UuidIdGenerator,
+    private val intelligence: FinancialSmsIntelligence = FinancialSmsIntelligence.deterministic(
+        registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) },
+    ),
 ) {
     private val matcher = BankMatcher(registry)
     private val poster = LedgerPoster(ids)
 
     fun ingest(incoming: InboundSms, state: LedgerState = LedgerState.empty()): IngestResult {
         val sms = bounded(incoming)
-        val financial = FinancialSignal.present(sms.body)
+        val assessment = intelligence.assess(SmsText(sms.sender, sms.body))
+        val financial = assessment.classification.type.isLedgerCandidate()
         if (DuplicateMatcher.providerReplay(state.messages, sms.providerMessageId) != null) {
             return IngestResult(state, status = null, attempt = null, alreadyIngested = true, financial = financial)
         }
@@ -45,7 +59,7 @@ class IngestPipeline(
             val linked = poster.attachDuplicateSms(state, bodyReplay.id, duplicate)
             return IngestResult(linked, status = null, attempt = null, alreadyIngested = true, financial = financial)
         }
-        val decision = interpret(sms)
+        val decision = interpret(sms, assessment)
         val stored = storedCopy(sms, hash, decision.retainBody)
         val attempt = ParseAttempt(
             id = ids.newId(),
@@ -63,7 +77,8 @@ class IngestPipeline(
             messages = state.messages + stored,
             attempts = state.attempts + attempt,
         )
-        val matchedProfile = decision.profile != null || decision.status == ParseStatus.AMBIGUOUS
+        val matchedProfile = decision.profile?.senderIds?.isNotEmpty() == true ||
+            decision.status == ParseStatus.AMBIGUOUS
         val posting = decision.status == ParseStatus.PARSED && decision.profile != null && decision.extraction != null
         if (posting) {
             next = poster.post(next, stored, decision.profile!!, decision.extraction!!)
@@ -166,38 +181,114 @@ class IngestPipeline(
         return rebuilt.copy(transactions = transactions, evidence = evidence)
     }
 
-    private fun interpret(sms: InboundSms): Interpretation {
+    private fun interpret(sms: InboundSms, assessment: ClassificationDecision): Interpretation {
         val matched = matcher.match(sms.sender)
         if (matched.size > 1) {
             return Interpretation(status = ParseStatus.AMBIGUOUS, retainBody = true)
         }
         val profile = matched.singleOrNull()
-            ?: return if (FinancialSignal.present(sms.body)) {
-                Interpretation(status = ParseStatus.UNSUPPORTED, retainBody = true)
-            } else {
-                Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false)
-            }
-        return when (val execution = TemplateRunner.execute(profile, sms)) {
-            TemplateExecution.NoTemplateMatch ->
-                if (FinancialSignal.present(sms.body)) {
-                    Interpretation(status = ParseStatus.UNSUPPORTED, retainBody = true, profile = profile)
-                } else {
-                    Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false, profile = profile)
+        if (profile != null) {
+            when (val execution = TemplateRunner.execute(profile, sms)) {
+                is TemplateExecution.ExtractorFailed -> return Interpretation(
+                    status = ParseStatus.FAILED,
+                    retainBody = true,
+                    profile = profile,
+                    templateId = execution.template.id,
+                    error = execution.reason,
+                )
+                is TemplateExecution.Extracted -> {
+                    val agrees = execution.postable && !contradicts(assessment, execution.extraction)
+                    return Interpretation(
+                        status = if (agrees) ParseStatus.PARSED else ParseStatus.LOW_CONFIDENCE,
+                        retainBody = true,
+                        profile = profile,
+                        templateId = execution.template.id,
+                        extraction = execution.extraction,
+                    )
                 }
-            is TemplateExecution.ExtractorFailed -> Interpretation(
-                status = ParseStatus.FAILED,
+                TemplateExecution.NoTemplateMatch -> Unit
+            }
+        }
+        if (assessment.postable) {
+            return Interpretation(
+                status = ParseStatus.PARSED,
                 retainBody = true,
-                profile = profile,
-                templateId = execution.template.id,
-                error = execution.reason,
+                profile = profile ?: unknownInstitution(assessment),
+                extraction = intelligenceExtraction(sms.body, assessment),
             )
-            is TemplateExecution.Extracted -> Interpretation(
-                status = if (execution.postable) ParseStatus.PARSED else ParseStatus.LOW_CONFIDENCE,
-                retainBody = true,
-                profile = profile,
-                templateId = execution.template.id,
-                extraction = execution.extraction,
-            )
+        }
+        if (assessment.classification.type.isLedgerCandidate()) {
+            return Interpretation(status = ParseStatus.UNSUPPORTED, retainBody = true, profile = profile)
+        }
+        return Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false, profile = profile)
+    }
+
+    private fun contradicts(assessment: ClassificationDecision, extraction: Extraction): Boolean {
+        val blocked = assessment.validation.ledgerForbidden && assessment.classification.confidence >= 80
+        if (blocked) return true
+        val understood = assessment.entities.amount ?: return false
+        if (assessment.entities.amountRole != AmountRole.TRANSACTION) return false
+        val templated = extraction.candidates.firstOrNull()?.amount ?: return false
+        return understood != templated
+    }
+
+    private fun unknownInstitution(assessment: ClassificationDecision): BankProfile {
+        val known = assessment.identification.candidates.singleOrNull()
+        return BankProfile(
+            id = known?.institutionId ?: UNKNOWN_INSTITUTION,
+            version = INTELLIGENCE_VERSION,
+            displayName = known?.displayName ?: "Unknown",
+            senderIds = emptySet(),
+            templates = emptyList(),
+        )
+    }
+
+    private fun intelligenceExtraction(body: String, assessment: ClassificationDecision): Extraction {
+        val kind = ledgerKind(assessment.classification.type, body)
+        val direction = when (assessment.entities.direction) {
+            MoneyDirection.CREDIT -> Direction.CREDIT
+            MoneyDirection.DEBIT, null -> Direction.DEBIT
+        }
+        val mask = assessment.entities.accountMask
+        val accountKind = when {
+            mask == null -> null
+            Regex("""(?i)\bcredit card\b""").containsMatchIn(body) -> AccountKind.CREDIT_CARD
+            Regex("""(?i)\bdebit card\b""").containsMatchIn(body) -> AccountKind.DEBIT_CARD
+            Regex("""(?i)\baccount\b""").containsMatchIn(body) -> AccountKind.ACCOUNT
+            else -> null
+        }
+        return Extraction(
+            confidence = assessment.classification.confidence,
+            candidates = listOf(
+                TransactionCandidate(
+                    kind = kind,
+                    amount = assessment.entities.amount,
+                    direction = direction,
+                    merchantRaw = assessment.entities.merchant,
+                    occurredAt = assessment.entities.occurredAt,
+                    reference = assessment.entities.reference,
+                    accountMask = mask,
+                    accountKind = accountKind,
+                    balance = assessment.entities.balance,
+                ),
+            ),
+        )
+    }
+
+    private fun ledgerKind(type: TransactionClass, body: String): TransactionKind {
+        return when (type) {
+            TransactionClass.CARD_PURCHASE, TransactionClass.PAYMENT -> TransactionKind.PURCHASE
+            TransactionClass.TRANSFER ->
+                if (Regex("""(?i)\b(received|incoming)\b|\btransfer\s+in\b""").containsMatchIn(body)) {
+                    TransactionKind.TRANSFER_IN
+                } else {
+                    TransactionKind.TRANSFER_OUT
+                }
+            TransactionClass.CASH_WITHDRAWAL -> TransactionKind.CASH_WITHDRAWAL
+            TransactionClass.REFUND -> TransactionKind.REFUND
+            TransactionClass.REVERSAL -> TransactionKind.REVERSAL
+            TransactionClass.FEE -> TransactionKind.FEE
+            else -> TransactionKind.UNKNOWN
         }
     }
 
@@ -225,6 +316,11 @@ class IngestPipeline(
             providerMessageId = sms.providerMessageId,
             receivedAt = sms.receivedAt,
         )
+    }
+
+    private companion object {
+        const val UNKNOWN_INSTITUTION: String = "unknown"
+        const val INTELLIGENCE_VERSION: String = "intelligence"
     }
 
     private data class Interpretation(
