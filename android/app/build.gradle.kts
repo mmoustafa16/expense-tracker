@@ -41,5 +41,6 @@ kotlin {
 
 dependencies {
     implementation(project(":android:capture"))
+    implementation(project(":android:storage"))
     testImplementation(libs.junit.jupiter)
 }

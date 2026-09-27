@@ -37,11 +37,13 @@ object CategoryResolver {
         merchantId: String?,
         normalizedKey: String?,
         rules: List<CategoryRule>,
+        customCategoryIds: Set<String> = emptySet(),
     ): CategoryAssignment? {
+        val accepted = CategoryCatalog.acceptedIds(customCategoryIds)
         val merchantRule = rules
             .asSequence()
             .filter { it.matchType == MatchType.MERCHANT && merchantId != null && it.pattern == merchantId }
-            .filter { CategorySeed.bySlug(it.categoryId) != null }
+            .filter { it.categoryId in accepted }
             .maxWithOrNull(ruleOrder)
         if (merchantRule != null) {
             return assignment(merchantRule, merchantSpecific = true)
@@ -49,7 +51,7 @@ object CategoryResolver {
         val key = normalizedKey?.takeIf { it.isNotBlank() } ?: return null
         val textual = rules
             .asSequence()
-            .filter { matchesText(it, key) && CategorySeed.bySlug(it.categoryId) != null }
+            .filter { matchesText(it, key) && it.categoryId in accepted }
             .maxWithOrNull(ruleOrder)
             ?: return null
         return assignment(textual, merchantSpecific = false)

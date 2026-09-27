@@ -1,0 +1,155 @@
+package expense.android.storage
+
+import app.cash.sqldelight.db.SqlDriver
+import expense.android.storage.db.ExpenseDatabase
+import expense.categories.CategoryChange
+import expense.categories.NewCategory
+import expense.ingest.IdGenerator
+import expense.ingest.IngestPipeline
+import expense.ingest.UuidIdGenerator
+import expense.ledger.AccountNames
+import expense.ledger.Correction
+import expense.ledger.LedgerCategories
+import expense.ledger.LedgerState
+import expense.ledger.ManualDraft
+import expense.ledger.ManualLedger
+import expense.ledger.ReviewDismissals
+import expense.sms.InboundSms
+import expense.sms.SmsSource
+import java.io.File
+
+sealed class UnlockResult {
+    data object Ready : UnlockResult()
+
+    data object KeyUnavailable : UnlockResult()
+
+    data object AuthenticationFailed : UnlockResult()
+}
+
+fun interface UnlockPrompt {
+    fun authenticate(onSuccess: () -> Unit, onFailure: () -> Unit)
+}
+
+class DatabaseLockedException : IllegalStateException("ledger database is locked")
+
+/**
+ * One cold start unlocks the database. Later operations reuse the passphrase
+ * held in this process and do not prompt again.
+ */
+class LedgerSession(
+    private val databaseFile: File,
+    private val vault: DatabaseKeyVault,
+    private val openDriver: (File, ByteArray) -> SqlDriver,
+    private val pipeline: IngestPipeline = IngestPipeline(),
+    private val ids: IdGenerator = UuidIdGenerator,
+) {
+    private val lock = Any()
+    private var passphrase: ByteArray? = null
+    private var repository: SqlDelightLedgerRepository? = null
+    private val pendingMessages = mutableListOf<InboundSms>()
+    private val pendingSources = mutableListOf<SmsSource>()
+
+    fun isUnlocked(): Boolean = synchronized(lock) { passphrase != null }
+
+    fun unlock(prompt: UnlockPrompt, onResult: (UnlockResult) -> Unit) {
+        synchronized(lock) {
+            if (passphrase != null) {
+                onResult(UnlockResult.Ready)
+                return
+            }
+        }
+        prompt.authenticate(
+            onSuccess = {
+                synchronized(lock) {
+                    if (passphrase != null) {
+                        onResult(UnlockResult.Ready)
+                        return@synchronized
+                    }
+                    when (val material = vault.readOrCreate(databaseFile.exists())) {
+                        is KeyMaterial.Available -> {
+                            passphrase = material.passphrase.copyOf()
+                            flushLocked()
+                            onResult(UnlockResult.Ready)
+                        }
+                        KeyMaterial.Unavailable -> onResult(UnlockResult.KeyUnavailable)
+                        KeyMaterial.AuthenticationRequired -> onResult(UnlockResult.AuthenticationFailed)
+                    }
+                }
+            },
+            onFailure = { onResult(UnlockResult.AuthenticationFailed) },
+        )
+    }
+
+    fun accept(messages: List<InboundSms>) {
+        if (messages.isEmpty()) return
+        synchronized(lock) {
+            if (passphrase == null) {
+                pendingMessages += messages
+            } else {
+                writeLocked(messages)
+            }
+        }
+    }
+
+    fun ingest(source: SmsSource) {
+        synchronized(lock) {
+            if (passphrase == null) {
+                pendingSources += source
+            } else {
+                writeLocked(source.messages())
+            }
+        }
+    }
+
+    fun load(): LedgerState = synchronized(lock) { repositoryLocked().load() }
+
+    fun search(query: String): List<SearchMatch> = synchronized(lock) { repositoryLocked().search(query) }
+
+    fun correct(correction: Correction): LedgerState = edit { pipeline.correct(it, correction) }
+
+    fun addCategory(draft: NewCategory): LedgerState = edit { LedgerCategories.add(it, draft) }
+
+    fun updateCategory(id: String, change: CategoryChange): LedgerState = edit {
+        LedgerCategories.update(it, id, change)
+    }
+
+    fun renameAccount(accountId: String, displayName: String): LedgerState = edit {
+        AccountNames.rename(it, accountId, displayName)
+    }
+
+    fun dismissReview(attemptId: String): LedgerState = edit { ReviewDismissals.dismiss(it, attemptId) }
+
+    fun postManual(draft: ManualDraft): LedgerState = edit { ManualLedger.post(it, draft, ids::newId) }
+
+    private fun edit(transform: (LedgerState) -> LedgerState): LedgerState {
+        return synchronized(lock) { repositoryLocked().update(transform) }
+    }
+
+    private fun flushLocked() {
+        val messages = pendingMessages.toList()
+        val sources = pendingSources.toList()
+        if (messages.isEmpty() && sources.isEmpty()) return
+        val combined = messages + sources.flatMap { it.messages() }
+        writeLocked(combined)
+        pendingMessages.clear()
+        pendingSources.clear()
+    }
+
+    private fun writeLocked(messages: List<InboundSms>) {
+        if (messages.isEmpty()) return
+        repositoryLocked().update { state ->
+            pipeline.ingestAll(SmsSource { messages }, state)
+        }
+    }
+
+    private fun repositoryLocked(): SqlDelightLedgerRepository {
+        repository?.let { return it }
+        val key = passphrase ?: throw DatabaseLockedException()
+        val driver = openDriver(databaseFile, key.copyOf())
+        val database = ExpenseDatabase(driver)
+        val created = SqlDelightLedgerRepository(database)
+        created.ensureSeed()
+        repository = created
+        return created
+    }
+}

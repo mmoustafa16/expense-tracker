@@ -1,7 +1,7 @@
 package expense.ingest
 
+import expense.categories.CategoryCatalog
 import expense.categories.CategoryRule
-import expense.categories.CategorySeed
 import expense.categories.CategorySource
 import expense.categories.MatchType
 import expense.categories.RuleSource
@@ -47,11 +47,11 @@ internal object CorrectionOverlay {
                 }
                 CorrectionField.CATEGORY -> {
                     val slug = correction.updatedValue?.trim().orEmpty()
-                    if (CategorySeed.bySlug(slug) == null) continue
-                    tx = tx.copy(categoryId = slug, categorySource = CategorySource.USER)
+                    val canonical = CategoryCatalog.canonicalId(slug, state.categories) ?: continue
+                    tx = tx.copy(categoryId = canonical, categorySource = CategorySource.USER)
                     val merchantId = tx.merchantId
                     if (correction.applyForward && merchantId != null) {
-                        rememberCategory(merchantId, slug, rules, ids)
+                        rememberCategory(merchantId, canonical, rules, ids)
                     }
                 }
                 CorrectionField.KIND -> {

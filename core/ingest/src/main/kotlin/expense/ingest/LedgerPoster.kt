@@ -219,7 +219,8 @@ internal class LedgerPoster(
         normalizedKey: String?,
         state: LedgerState,
     ): Pair<String?, CategorySource> {
-        val ruled = CategoryResolver.resolve(merchantId, normalizedKey, state.categoryRules)
+        val customCategoryIds = state.categories.flatMap { listOf(it.id, it.slug) }.toSet()
+        val ruled = CategoryResolver.resolve(merchantId, normalizedKey, state.categoryRules, customCategoryIds)
         val kindDefault = KindCategories.defaultSlug(kind)
         return when {
             ruled != null && ruled.merchantSpecific -> ruled.categoryId to ruled.source

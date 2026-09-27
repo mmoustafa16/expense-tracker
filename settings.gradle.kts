@@ -37,5 +37,6 @@ include(
     ":core:ledger",
     ":core:ingest",
     ":android:capture",
+    ":android:storage",
     ":android:app",
 )
