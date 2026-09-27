@@ -42,6 +42,7 @@ import expense.android.ui.analytics.AnalyticsRoute
 import expense.android.ui.ledger.AccountRoute
 import expense.android.ui.ledger.CategoriesRoute
 import expense.android.ui.ledger.LedgerRoute
+import expense.android.ui.ledger.LedgerScanMetric
 import expense.android.ui.ledger.LedgerScanSummary
 import expense.android.ui.ledger.TransactionRoute
 import expense.android.ui.review.ManualTransactionRoute
@@ -258,8 +259,7 @@ private fun InboxScan.summary(): LedgerScanSummary? {
     if (phase == InboxScanPhase.IDLE) return null
     return LedgerScanSummary(
         title = InboxScanText.title(running = phase == InboxScanPhase.RUNNING),
-        summary = InboxScanText.compact(tally),
-        reviewLine = InboxScanText.reviewLine(tally),
+        metrics = InboxScanText.metrics(tally).map { LedgerScanMetric(it.label, it.value) },
         detail = InboxScanText.detail(tally),
         note = InboxScanText.unmatchedNote(tally),
     )

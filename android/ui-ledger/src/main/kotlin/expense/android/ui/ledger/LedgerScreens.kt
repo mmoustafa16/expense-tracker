@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,10 +49,14 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+data class LedgerScanMetric(
+    val label: String,
+    val value: String,
+)
+
 data class LedgerScanSummary(
     val title: String,
-    val summary: String,
-    val reviewLine: String,
+    val metrics: List<LedgerScanMetric>,
     val detail: String,
     val note: String?,
 )
@@ -141,19 +146,46 @@ fun LedgerScreen(
 @Composable
 private fun ScanSummaryCard(scan: LedgerScanSummary) {
     var expanded by remember { mutableStateOf(false) }
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(scan.title, style = MaterialTheme.typography.titleSmall)
-            Text(scan.summary)
-            Text(scan.reviewLine)
-            if (expanded) {
-                Text(scan.detail)
-                scan.note?.let { Text(it) }
+        Text(
+            scan.title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            scan.metrics.forEach { metric ->
+                MetricTile(metric, Modifier.weight(1f))
             }
+        }
+        if (expanded) {
+            Text(scan.detail, style = MaterialTheme.typography.bodySmall)
+            scan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+@Composable
+private fun MetricTile(metric: LedgerScanMetric, modifier: Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(
+                metric.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+            Text(metric.value, style = MaterialTheme.typography.titleMedium)
         }
     }
 }

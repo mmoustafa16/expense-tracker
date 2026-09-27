@@ -50,8 +50,16 @@ class InboxScanTest {
         assertFalse(text.contains("EGP"))
         assertEquals("Scanning the inbox", InboxScanText.title(running = true))
         assertEquals("Last inbox scan", InboxScanText.title(running = false))
-        assertEquals("10 scanned · 4 financial · 0 posted", InboxScanText.compact(tally))
-        assertEquals("4 need review", InboxScanText.reviewLine(tally))
+        assertEquals(
+            listOf(
+                ScanMetric("Scanned", "10"),
+                ScanMetric("Financial", "4"),
+                ScanMetric("Needs review", "4"),
+            ),
+            InboxScanText.metrics(tally),
+        )
+        assertTrue(InboxScanText.metrics(tally).none { it.label == "Posted" })
+        assertEquals("10,748", InboxScanText.count(10_748))
         assertEquals("Matched 0 · Parsed 0 · Posted 0.", InboxScanText.detail(tally))
     }
 }
