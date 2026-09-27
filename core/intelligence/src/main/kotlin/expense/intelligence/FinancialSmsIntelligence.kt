@@ -6,9 +6,9 @@ package expense.intelligence
  * then [TransactionValidator], then a [ClassificationDecision].
  *
  * Classification and extraction run even when discovery returns unknown.
- * A ledger post still requires one verified institution plus a validated
- * high-confidence transaction. An unknown or ambiguous institution stays
- * in review.
+ * A ledger post still requires a [VerifiedSenderRegistry] hit plus a validated
+ * high-confidence transaction. Evidence, metadata, and a user confirmation
+ * can name an institution, and an unknown or ambiguous result stays in review.
  *
  * A future small on-device model can replace discovery, the classifier, or
  * the extractor. This type does not call a cloud model or send the SMS anywhere.
@@ -75,11 +75,13 @@ class FinancialSmsIntelligence(
         fun deterministic(
             senders: List<RegisteredSender> = emptyList(),
             userConfirmed: List<UserConfirmedSender> = emptyList(),
+            evidence: List<LocalInstitutionEvidence> = emptyList(),
         ): FinancialSmsIntelligence {
             return FinancialSmsIntelligence(
                 discovery = CompositeBankDiscovery(
                     sources = listOf(
                         VerifiedSenderRegistry(senders),
+                        EvidenceBackedDiscovery(StructuralBankEvidenceCollector(), evidence),
                         PublicBankMetadata(),
                         UserConfirmedSenders(userConfirmed),
                         OnDeviceModelDiscovery(),

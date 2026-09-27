@@ -10,6 +10,8 @@ import expense.intelligence.DeterministicTransactionValidator
 import expense.intelligence.ExtractedEntities
 import expense.intelligence.FinancialEntityExtractor
 import expense.intelligence.FinancialSmsIntelligence
+import expense.intelligence.LocalInstitutionEvidence
+import expense.intelligence.UserConfirmedSender
 import expense.ledger.SpendPolicy
 import expense.money.Currency
 import expense.money.Money
@@ -35,6 +37,32 @@ class IntelligenceIngestTest {
         assertTrue(first.state.transactions.isEmpty())
         assertEquals(1, first.state.reviewQueue().size)
         assertEquals(body, first.state.messages.single().body)
+        assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
+    }
+
+    @Test
+    fun `the same purchase from an evidence-only or user-confirmed institution stays in review`() {
+        val body = "Your card was used for EGP 450 at Talabat"
+        val evidenceOnly = FinancialSmsIntelligence.deterministic(
+            evidence = listOf(
+                LocalInstitutionEvidence("example.evidence-bank", "Evidence Bank", setOf("EVIDENCEBANK")),
+            ),
+        )
+        val hinted = IngestPipeline(ids = IntelligenceIds(), intelligence = evidenceOnly)
+            .ingest(sms("hint", body, sender = "EVIDENCEBANK"))
+        assertEquals(ParseStatus.UNSUPPORTED, hinted.status)
+        assertFalse(hinted.posted)
+        assertTrue(hinted.state.transactions.isEmpty())
+        assertEquals(1, hinted.state.reviewQueue().size)
+
+        val confirmed = FinancialSmsIntelligence.deterministic(
+            userConfirmed = listOf(UserConfirmedSender("example.confirmed-bank", "Confirmed Bank", "MYBANK")),
+        )
+        val named = IngestPipeline(ids = IntelligenceIds(), intelligence = confirmed)
+            .ingest(sms("named", body, sender = "MYBANK"))
+        assertEquals(ParseStatus.UNSUPPORTED, named.status)
+        assertFalse(named.posted)
+        assertTrue(named.state.transactions.isEmpty())
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
     }
 

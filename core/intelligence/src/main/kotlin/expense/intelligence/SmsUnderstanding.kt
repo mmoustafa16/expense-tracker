@@ -58,6 +58,11 @@ enum class AmountRole {
     AMBIGUOUS,
 }
 
+/**
+ * Verified sender aliases for one institution.
+ * [senderIds] may contain more than one alias. An alias is added only when a
+ * local fixture has verified it. Matching is an exact trim, not a guess.
+ */
 data class RegisteredSender(
     val institutionId: String,
     val displayName: String,

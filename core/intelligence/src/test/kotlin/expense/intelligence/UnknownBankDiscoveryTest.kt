@@ -131,16 +131,19 @@ class UnknownBankDiscoveryTest {
     }
 
     @Test
-    fun `a user confirmed sender can authorize the same purchase`() {
+    fun `a user confirmed sender names the institution and still cannot post`() {
         val confirmed = FinancialSmsIntelligence.deterministic(
             userConfirmed = listOf(UserConfirmedSender("example.confirmed-bank", "Confirmed Bank", "MYBANK")),
         )
         val decision = confirmed.assess(SmsText("MYBANK", "Your card was used for EGP 450 at Talabat"))
         assertEquals(DiscoveryStatus.KNOWN, decision.discovery.status)
-        assertEquals(DiscoverySourceKind.USER_CONFIRMED_SENDER, decision.discovery.verifiedInstitution?.source)
+        assertEquals("example.confirmed-bank", decision.discovery.candidates.single().institutionId)
+        assertEquals(DiscoverySourceKind.USER_CONFIRMED_SENDER, decision.discovery.candidates.single().source)
+        assertNull(decision.discovery.verifiedInstitution)
         assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
         assertEquals(Money(45000, Currency.EGP), decision.entities.amount)
-        assertTrue(decision.postable)
+        assertEquals(ConfidenceLevel.MEDIUM, decision.level)
+        assertFalse(decision.postable)
     }
 
     private fun assess(body: String): ClassificationDecision {

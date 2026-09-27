@@ -9,16 +9,15 @@ package expense.intelligence
  */
 enum class DiscoverySourceKind {
     VERIFIED_SENDER_REGISTRY,
+    BANK_EVIDENCE,
     PUBLIC_BANK_METADATA,
     USER_CONFIRMED_SENDER,
     ON_DEVICE_MODEL,
     LOCAL_LEARNED_PATTERN,
     ;
 
-    fun authorizesLedger(): Boolean = when (this) {
-        VERIFIED_SENDER_REGISTRY, USER_CONFIRMED_SENDER -> true
-        PUBLIC_BANK_METADATA, ON_DEVICE_MODEL, LOCAL_LEARNED_PATTERN -> false
-    }
+    /** The verified sender registry is the only source that may authorize a ledger post. */
+    fun authorizesLedger(): Boolean = this == VERIFIED_SENDER_REGISTRY
 }
 
 enum class DiscoveryStatus {
@@ -38,6 +37,7 @@ data class DiscoveredInstitution(
     val confidence: Int,
     val source: DiscoverySourceKind,
     val verified: Boolean,
+    val evidence: List<MatchedEvidence> = emptyList(),
 )
 
 data class BankDiscoveryResult(
@@ -97,6 +97,7 @@ class VerifiedSenderRegistry(
                     confidence = VERIFIED_CONFIDENCE,
                     source = kind,
                     verified = true,
+                    evidence = listOf(MatchedEvidence(EvidenceKind.SENDER_ALIAS, trimmed)),
                 )
             }
     }
@@ -124,7 +125,8 @@ data class UserConfirmedSender(
 
 /**
  * Sender identities the account holder confirmed on the device.
- * A confirmation is verified for ledger purposes. Nothing is confirmed by default.
+ * A confirmation can name an institution. It cannot authorize a ledger post.
+ * Nothing is confirmed by default.
  */
 class UserConfirmedSenders(
     private val confirmations: List<UserConfirmedSender> = emptyList(),
@@ -140,7 +142,8 @@ class UserConfirmedSenders(
                 displayName = confirmed.displayName,
                 confidence = CONFIRMED_CONFIDENCE,
                 source = kind,
-                verified = true,
+                verified = false,
+                evidence = listOf(MatchedEvidence(EvidenceKind.SENDER_ALIAS, trimmed)),
             )
         }
     }
@@ -172,7 +175,8 @@ class LocalLearnedPatterns : BankDiscoverySource {
 
 /**
  * Runs every [BankDiscoverySource] and merges institution ids.
- * A hint from metadata, a model, or a learned pattern cannot mark itself verified.
+ * Only a [VerifiedSenderRegistry] hit can stay verified. Evidence, metadata,
+ * a model, a learned pattern, or a user confirmation cannot.
  */
 class CompositeBankDiscovery(
     private val sources: List<BankDiscoverySource>,
@@ -189,6 +193,7 @@ class CompositeBankDiscovery(
                 confidence = best.confidence,
                 source = verifiedHit?.source ?: best.source,
                 verified = verifiedHit != null,
+                evidence = hits.flatMap { it.evidence }.distinct(),
             )
         }.sortedByDescending { it.confidence }
         val status = if (merged.size == 1) DiscoveryStatus.KNOWN else DiscoveryStatus.AMBIGUOUS
