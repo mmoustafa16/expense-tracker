@@ -1,0 +1,369 @@
+CREATE TABLE stored_sms (
+  id TEXT NOT NULL PRIMARY KEY,
+  sender TEXT NOT NULL,
+  body TEXT,
+  body_hash TEXT NOT NULL,
+  provider_message_id TEXT,
+  received_at INTEGER NOT NULL
+);
+
+CREATE TABLE parse_attempt (
+  id TEXT NOT NULL PRIMARY KEY,
+  sms_id TEXT NOT NULL,
+  pipeline_version TEXT NOT NULL,
+  profile_id TEXT,
+  profile_version TEXT,
+  template_id TEXT,
+  status TEXT NOT NULL,
+  confidence INTEGER,
+  error TEXT
+);
+
+CREATE TABLE extraction_candidate (
+  attempt_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  amount_minor INTEGER,
+  amount_currency TEXT,
+  merchant_raw TEXT,
+  occurred_at TEXT,
+  reference TEXT,
+  account_mask TEXT,
+  account_kind TEXT,
+  balance_minor INTEGER,
+  balance_currency TEXT,
+  foreign_minor INTEGER,
+  foreign_currency TEXT,
+  installment_index INTEGER,
+  installment_count INTEGER,
+  PRIMARY KEY (attempt_id, position)
+);
+
+CREATE TABLE account (
+  id TEXT NOT NULL PRIMARY KEY,
+  institution_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  mask TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  display_name TEXT NOT NULL
+);
+
+CREATE TABLE merchant (
+  id TEXT NOT NULL PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  normalized_key TEXT NOT NULL
+);
+
+CREATE TABLE merchant_alias (
+  id TEXT NOT NULL PRIMARY KEY,
+  merchant_id TEXT NOT NULL,
+  pattern_type TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  priority INTEGER NOT NULL,
+  source TEXT NOT NULL
+);
+
+CREATE TABLE category (
+  id TEXT NOT NULL PRIMARY KEY,
+  parent_id TEXT,
+  name_en TEXT NOT NULL,
+  name_ar TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  system_row INTEGER NOT NULL
+);
+
+CREATE TABLE category_rule (
+  id TEXT NOT NULL PRIMARY KEY,
+  match_type TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  category_id TEXT NOT NULL,
+  priority INTEGER NOT NULL,
+  source TEXT NOT NULL
+);
+
+CREATE TABLE correction (
+  id TEXT NOT NULL PRIMARY KEY,
+  dedup_key TEXT NOT NULL,
+  field TEXT NOT NULL,
+  previous_value TEXT,
+  updated_value TEXT,
+  apply_forward INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE ledger_transaction (
+  id TEXT NOT NULL PRIMARY KEY,
+  dedup_key TEXT NOT NULL,
+  sms_id TEXT NOT NULL,
+  institution_id TEXT NOT NULL,
+  account_id TEXT,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  amount_minor INTEGER NOT NULL,
+  amount_currency TEXT NOT NULL,
+  amount_text TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  occurred_at INTEGER NOT NULL,
+  occurred_civil TEXT NOT NULL,
+  occurred_source TEXT NOT NULL,
+  merchant_raw TEXT,
+  merchant_id TEXT,
+  category_id TEXT,
+  category_source TEXT NOT NULL,
+  reference TEXT,
+  balance_minor INTEGER,
+  balance_currency TEXT,
+  foreign_minor INTEGER,
+  foreign_currency TEXT,
+  duplicate_of_id TEXT,
+  linked_transaction_id TEXT,
+  include_in_spend INTEGER NOT NULL,
+  pipeline_version TEXT NOT NULL,
+  profile_version TEXT NOT NULL,
+  installment_index INTEGER,
+  installment_count INTEGER,
+  manual INTEGER NOT NULL
+);
+
+CREATE TABLE transaction_evidence (
+  id TEXT NOT NULL PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  sms_id TEXT NOT NULL,
+  role TEXT NOT NULL
+);
+
+CREATE TABLE possible_duplicate (
+  id TEXT NOT NULL PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  other_transaction_id TEXT NOT NULL
+);
+
+CREATE TABLE review_dismissal (
+  sender TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  received_at INTEGER NOT NULL,
+  provider_message_id TEXT
+);
+
+deleteMessages:
+DELETE FROM stored_sms;
+
+deleteAttempts:
+DELETE FROM parse_attempt;
+
+deleteCandidates:
+DELETE FROM extraction_candidate;
+
+deleteAccounts:
+DELETE FROM account;
+
+deleteMerchants:
+DELETE FROM merchant;
+
+deleteAliases:
+DELETE FROM merchant_alias;
+
+deleteCategories:
+DELETE FROM category;
+
+deleteRules:
+DELETE FROM category_rule;
+
+deleteCorrections:
+DELETE FROM correction;
+
+deleteTransactions:
+DELETE FROM ledger_transaction;
+
+deleteEvidence:
+DELETE FROM transaction_evidence;
+
+deleteDuplicates:
+DELETE FROM possible_duplicate;
+
+deleteDismissals:
+DELETE FROM review_dismissal;
+
+insertSms:
+INSERT INTO stored_sms(id, sender, body, body_hash, provider_message_id, received_at)
+VALUES (:id, :sender, :body, :bodyHash, :providerMessageId, :receivedAt);
+
+insertAttempt:
+INSERT INTO parse_attempt(id, sms_id, pipeline_version, profile_id, profile_version, template_id, status, confidence, error)
+VALUES (:id, :smsId, :pipelineVersion, :profileId, :profileVersion, :templateId, :status, :confidence, :error);
+
+insertCandidate:
+INSERT INTO extraction_candidate(
+  attempt_id, position, kind, direction, amount_minor, amount_currency, merchant_raw, occurred_at,
+  reference, account_mask, account_kind, balance_minor, balance_currency, foreign_minor, foreign_currency,
+  installment_index, installment_count
+) VALUES (
+  :attemptId, :position, :kind, :direction, :amountMinor, :amountCurrency, :merchantRaw, :occurredAt,
+  :reference, :accountMask, :accountKind, :balanceMinor, :balanceCurrency, :foreignMinor, :foreignCurrency,
+  :installmentIndex, :installmentCount
+);
+
+insertAccount:
+INSERT INTO account(id, institution_id, kind, mask, currency, display_name)
+VALUES (:id, :institutionId, :kind, :mask, :currency, :displayName);
+
+insertMerchant:
+INSERT INTO merchant(id, display_name, normalized_key)
+VALUES (:id, :displayName, :normalizedKey);
+
+insertAlias:
+INSERT INTO merchant_alias(id, merchant_id, pattern_type, pattern, priority, source)
+VALUES (:id, :merchantId, :patternType, :pattern, :priority, :source);
+
+insertCategory:
+INSERT OR IGNORE INTO category(id, parent_id, name_en, name_ar, slug, sort_order, system_row)
+VALUES (:id, :parentId, :nameEn, :nameAr, :slug, :sortOrder, :systemRow);
+
+insertRule:
+INSERT INTO category_rule(id, match_type, pattern, category_id, priority, source)
+VALUES (:id, :matchType, :pattern, :categoryId, :priority, :source);
+
+insertCorrection:
+INSERT INTO correction(id, dedup_key, field, previous_value, updated_value, apply_forward, created_at)
+VALUES (:id, :dedupKey, :field, :previousValue, :updatedValue, :applyForward, :createdAt);
+
+insertTransaction:
+INSERT INTO ledger_transaction(
+  id, dedup_key, sms_id, institution_id, account_id, kind, status, amount_minor, amount_currency, amount_text,
+  direction, occurred_at, occurred_civil, occurred_source, merchant_raw, merchant_id, category_id, category_source,
+  reference, balance_minor, balance_currency, foreign_minor, foreign_currency, duplicate_of_id, linked_transaction_id,
+  include_in_spend, pipeline_version, profile_version, installment_index, installment_count, manual
+) VALUES (
+  :id, :dedupKey, :smsId, :institutionId, :accountId, :kind, :status, :amountMinor, :amountCurrency, :amountText,
+  :direction, :occurredAt, :occurredCivil, :occurredSource, :merchantRaw, :merchantId, :categoryId, :categorySource,
+  :reference, :balanceMinor, :balanceCurrency, :foreignMinor, :foreignCurrency, :duplicateOfId, :linkedTransactionId,
+  :includeInSpend, :pipelineVersion, :profileVersion, :installmentIndex, :installmentCount, :manual
+);
+
+insertEvidence:
+INSERT INTO transaction_evidence(id, transaction_id, sms_id, role)
+VALUES (:id, :transactionId, :smsId, :role);
+
+insertDuplicate:
+INSERT INTO possible_duplicate(id, transaction_id, other_transaction_id)
+VALUES (:id, :transactionId, :otherTransactionId);
+
+insertDismissal:
+INSERT INTO review_dismissal(sender, body_hash, received_at, provider_message_id)
+VALUES (:sender, :bodyHash, :receivedAt, :providerMessageId);
+
+selectMessages:
+SELECT id, sender, body, body_hash AS bodyHash, provider_message_id AS providerMessageId, received_at AS receivedAt
+FROM stored_sms
+ORDER BY rowid;
+
+selectAttempts:
+SELECT id, sms_id AS smsId, pipeline_version AS pipelineVersion, profile_id AS profileId,
+  profile_version AS profileVersion, template_id AS templateId, status, confidence, error
+FROM parse_attempt
+ORDER BY rowid;
+
+selectCandidates:
+SELECT attempt_id AS attemptId, position, kind, direction, amount_minor AS amountMinor,
+  amount_currency AS amountCurrency, merchant_raw AS merchantRaw, occurred_at AS occurredAt,
+  reference, account_mask AS accountMask, account_kind AS accountKind, balance_minor AS balanceMinor,
+  balance_currency AS balanceCurrency, foreign_minor AS foreignMinor, foreign_currency AS foreignCurrency,
+  installment_index AS installmentIndex, installment_count AS installmentCount
+FROM extraction_candidate
+ORDER BY attempt_id, position;
+
+selectAccounts:
+SELECT id, institution_id AS institutionId, kind, mask, currency, display_name AS displayName
+FROM account
+ORDER BY rowid;
+
+selectMerchants:
+SELECT id, display_name AS displayName, normalized_key AS normalizedKey
+FROM merchant
+ORDER BY rowid;
+
+selectAliases:
+SELECT id, merchant_id AS merchantId, pattern_type AS patternType, pattern, priority, source
+FROM merchant_alias
+ORDER BY rowid;
+
+selectCategories:
+SELECT id, parent_id AS parentId, name_en AS nameEn, name_ar AS nameAr, slug, sort_order AS sortOrder, system_row AS systemRow
+FROM category
+ORDER BY sort_order, id;
+
+selectRules:
+SELECT id, match_type AS matchType, pattern, category_id AS categoryId, priority, source
+FROM category_rule
+ORDER BY rowid;
+
+selectCorrections:
+SELECT id, dedup_key AS dedupKey, field AS correctionField, previous_value AS previousValue,
+  updated_value AS updatedValue, apply_forward AS applyForward, created_at AS createdAt
+FROM correction
+ORDER BY created_at, id;
+
+selectTransactions:
+SELECT id, dedup_key AS dedupKey, sms_id AS smsId, institution_id AS institutionId, account_id AS accountId,
+  kind, status, amount_minor AS amountMinor, amount_currency AS amountCurrency, amount_text AS amountText,
+  direction, occurred_at AS occurredAt, occurred_civil AS occurredCivil, occurred_source AS occurredSource,
+  merchant_raw AS merchantRaw, merchant_id AS merchantId, category_id AS categoryId,
+  category_source AS categorySource, reference, balance_minor AS balanceMinor, balance_currency AS balanceCurrency,
+  foreign_minor AS foreignMinor, foreign_currency AS foreignCurrency, duplicate_of_id AS duplicateOfId,
+  linked_transaction_id AS linkedTransactionId, include_in_spend AS includeInSpend,
+  pipeline_version AS pipelineVersion, profile_version AS profileVersion,
+  installment_index AS installmentIndex, installment_count AS installmentCount, manual
+FROM ledger_transaction
+ORDER BY rowid;
+
+selectEvidence:
+SELECT id, transaction_id AS transactionId, sms_id AS smsId, role
+FROM transaction_evidence
+ORDER BY rowid;
+
+selectDuplicates:
+SELECT id, transaction_id AS transactionId, other_transaction_id AS otherTransactionId
+FROM possible_duplicate
+ORDER BY rowid;
+
+selectDismissals:
+SELECT sender, body_hash AS bodyHash, received_at AS receivedAt, provider_message_id AS providerMessageId
+FROM review_dismissal
+ORDER BY rowid;
+
+matchTransactionBody:
+SELECT t.id AS transactionId, t.sms_id AS smsId
+FROM ledger_transaction t
+INNER JOIN stored_sms s ON s.id = t.sms_id
+WHERE s.body IS NOT NULL AND instr(lower(s.body), lower(:needle)) > 0;
+
+matchMerchant:
+SELECT t.id AS transactionId, t.sms_id AS smsId
+FROM ledger_transaction t
+LEFT JOIN merchant m ON m.id = t.merchant_id
+WHERE instr(lower(ifnull(t.merchant_raw, '')), lower(:needle)) > 0
+   OR instr(lower(ifnull(m.display_name, '')), lower(:needle)) > 0
+   OR instr(lower(ifnull(m.normalized_key, '')), lower(:needle)) > 0;
+
+matchReference:
+SELECT id AS transactionId, sms_id AS smsId
+FROM ledger_transaction
+WHERE reference IS NOT NULL AND instr(lower(reference), lower(:needle)) > 0;
+
+matchAmount:
+SELECT id AS transactionId, sms_id AS smsId
+FROM ledger_transaction
+WHERE instr(lower(amount_text), lower(:needle)) > 0
+   OR instr(CAST(amount_minor AS TEXT), :needle) > 0;
+
+matchCategory:
+SELECT id AS transactionId, sms_id AS smsId
+FROM ledger_transaction
+WHERE category_id IN :categoryIds;
+
+matchSmsBody:
+SELECT id AS smsId
+FROM stored_sms
+WHERE body IS NOT NULL AND instr(lower(body), lower(:needle)) > 0;
