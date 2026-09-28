@@ -204,7 +204,7 @@ internal class SemanticEncoder private constructor(
                 replacements.add(
                     if (step.has("regex")) {
                         TextReplacement(
-                            pattern = Pattern.compile(step.getString("regex"), Pattern.UNICODE_CHARACTER_CLASS),
+                            pattern = compileNormalizerPattern(step.getString("regex")),
                             literal = null,
                             content = content,
                         )
@@ -541,6 +541,24 @@ private fun u32(blob: ByteArray, offset: Int): Long {
         ((blob[offset + 2].toLong() and 0xFF) shl 16) or
         ((blob[offset + 3].toLong() and 0xFF) shl 24)
 }
+
+/**
+ * Compiles one normalizer pattern from the multilingual tokenizer.
+ *
+ * Android's [java.util.regex.Pattern] throws
+ * `IllegalArgumentException: UNICODE_CHARACTER_CLASS flag not supported`
+ * when that flag is passed, which crashes process startup inside
+ * [SemanticTransactionClassifier] class initialization. Unicode whitespace
+ * is written out instead, so `\s` still matches the same characters the
+ * model normalizer uses on the desktop JDK.
+ */
+internal fun compileNormalizerPattern(regex: String): Pattern {
+    val portable = regex.replace("\\s", UNICODE_WHITE_SPACE_CLASS)
+    return Pattern.compile(portable)
+}
+
+private const val UNICODE_WHITE_SPACE_CLASS =
+    "[\\u0009-\\u000D\\u0020\\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]"
 
 private fun hasLeaf(unit: Long): Boolean = ((unit shr 8) and 1L) == 1L
 

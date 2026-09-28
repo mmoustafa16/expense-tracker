@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.regex.Pattern
 import kotlin.math.abs
 
 /**
@@ -38,6 +39,23 @@ class SemanticClassificationTest {
 
         assertEquals(attempt, classifier.classify(SmsText("UNRELATED", attemptBody)))
         assertEquals(purchase, classifier.classify(SmsText("ANOTHER", purchaseBody)))
+    }
+
+    @Test
+    fun `normalizer patterns avoid the regex flag Android rejects at startup`() {
+        val compiled = compileNormalizerPattern("\\s+")
+        assertEquals(0, compiled.flags() and Pattern.UNICODE_CHARACTER_CLASS)
+        val reference = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS)
+        for (code in 0..0xFFFF) {
+            val text = code.toChar().toString()
+            assertEquals(
+                reference.matcher(text).matches(),
+                compiled.matcher(text).matches(),
+                "U+%04X".format(code),
+            )
+        }
+        assertTrue(compiled.matcher("\u00A0\u3000").matches())
+        assertFalse(compiled.matcher("ع").matches())
     }
 
     @Test
