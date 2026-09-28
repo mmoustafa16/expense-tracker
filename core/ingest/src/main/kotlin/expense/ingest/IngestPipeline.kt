@@ -188,10 +188,10 @@ class IngestPipeline(
     private fun interpret(sms: InboundSms, assessment: ClassificationDecision): Interpretation {
         val matched = matcher.match(sms.sender)
         val profile = matched.singleOrNull()
-        if (nonFinancial(assessment)) {
-            return Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false, profile = profile)
-        }
         if (matched.size > 1) {
+            if (nonFinancial(assessment)) {
+                return Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false)
+            }
             return Interpretation(status = ParseStatus.AMBIGUOUS, retainBody = true)
         }
         if (profile != null) {
@@ -237,8 +237,6 @@ class IngestPipeline(
     }
 
     private fun contradicts(assessment: ClassificationDecision, extraction: Extraction): Boolean {
-        val blocked = assessment.validation.ledgerForbidden && assessment.classification.confidence >= 80
-        if (blocked) return true
         val understood = assessment.entities.amount ?: return false
         if (assessment.entities.amountRole != AmountRole.TRANSACTION) return false
         val templated = extraction.candidates.firstOrNull()?.amount ?: return false
@@ -259,7 +257,7 @@ class IngestPipeline(
     }
 
     private fun intelligenceExtraction(body: String, assessment: ClassificationDecision): Extraction {
-        val kind = ledgerKind(assessment.classification.type, body)
+        val kind = ledgerKind(assessment.classification.type, assessment.entities.direction)
         val direction = when (assessment.entities.direction) {
             MoneyDirection.CREDIT -> Direction.CREDIT
             MoneyDirection.DEBIT, null -> Direction.DEBIT
@@ -290,11 +288,11 @@ class IngestPipeline(
         )
     }
 
-    private fun ledgerKind(type: TransactionClass, body: String): TransactionKind {
+    private fun ledgerKind(type: TransactionClass, direction: MoneyDirection?): TransactionKind {
         return when (type) {
             TransactionClass.CARD_PURCHASE, TransactionClass.PAYMENT -> TransactionKind.PURCHASE
             TransactionClass.TRANSFER ->
-                if (Regex("""(?i)\b(received|incoming)\b|\btransfer\s+in\b""").containsMatchIn(body)) {
+                if (direction == MoneyDirection.CREDIT) {
                     TransactionKind.TRANSFER_IN
                 } else {
                     TransactionKind.TRANSFER_OUT

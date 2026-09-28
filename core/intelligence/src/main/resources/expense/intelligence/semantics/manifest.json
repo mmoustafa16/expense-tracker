@@ -1,0 +1,22 @@
+{
+  "id": "potion-base-8m-sms-intents-v1",
+  "encoder": "minishlab/potion-base-8M",
+  "encoderBase": "BAAI/bge-base-en-v1.5",
+  "method": "mean-pooled static semantic embedding plus a one-hidden-layer classifier",
+  "dim": 256,
+  "vocabSize": 29528,
+  "maxTokens": 512,
+  "medianTokenLength": 6,
+  "unkId": 1,
+  "normalize": true,
+  "embeddingDtype": "float16",
+  "temperature": 0.7,
+  "probeToken": "the",
+  "probeIndex": 1002,
+  "probeValues": [
+    -0.06707763671875,
+    -0.20654296875,
+    0.05267333984375,
+    0.372314453125
+  ]
+}

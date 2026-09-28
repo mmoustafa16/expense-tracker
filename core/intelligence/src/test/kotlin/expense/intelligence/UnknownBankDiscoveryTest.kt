@@ -113,7 +113,7 @@ class UnknownBankDiscoveryTest {
                     },
                 ),
             ),
-            classifier = DeterministicTransactionClassifier(),
+            classifier = SemanticTransactionClassifier.bundled(),
             extractor = DeterministicEntityExtractor(),
             validator = DeterministicTransactionValidator(),
         )

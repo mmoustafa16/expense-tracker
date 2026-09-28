@@ -10,8 +10,8 @@ package expense.intelligence
  * high-confidence transaction. Evidence, metadata, and a user confirmation
  * can name an institution, and an unknown or ambiguous result stays in review.
  *
- * A future on-device model replaces the classifier and extractor through
- * [replacing]. Discovery, validation, and the ledger rules stay in place.
+ * The default classifier is the bundled on-device semantic model.
+ * [replacing] swaps that model without changing discovery, validation, or the ledger.
  * This type does not call a cloud model or send the SMS anywhere.
  * Institutions are [InstitutionBootstrap] records, not branches in this class.
  */
@@ -25,7 +25,12 @@ class FinancialSmsIntelligence(
         val discovered = discovery.discover(message)
         val classification = classifier.classify(message)
         val extracted = extractor.extract(message)
-        val entities = extracted.copy(direction = directionFor(classification.type, message.body))
+        val direction = if (classification.semantics != null) {
+            classification.semantics.direction
+        } else {
+            directionFor(classification.type, message.body)
+        }
+        val entities = extracted.copy(direction = direction)
         val validation = validator.validate(message, classification, entities)
         val level = levelFor(classification, entities, validation, discovered)
         return ClassificationDecision(discovered, classification, entities, validation, level)
@@ -80,7 +85,7 @@ class FinancialSmsIntelligence(
             evidence: List<LocalInstitutionEvidence> = emptyList(),
         ): FinancialSmsIntelligence {
             return replacing(
-                classifier = DeterministicTransactionClassifier(),
+                classifier = SemanticTransactionClassifier.bundled(),
                 extractor = DeterministicEntityExtractor(),
                 senders = senders,
                 userConfirmed = userConfirmed,

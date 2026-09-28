@@ -1,0 +1,560 @@
+[
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your card was used to purchase EGP 65 at XYZ."
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A debit card transaction settled at the bookstore for 18 pounds."
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "We processed a store checkout on the plastic for USD 12.40."
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The retailer collected 90 dirhams through your linked card."
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The shop tried to take money from the card but the attempt was declined."
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Card authorization failed before any funds left the account at the grocery."
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "No charge was posted. The checkout at the kiosk did not complete."
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Merchant request was rejected by the issuer. Nothing was collected."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "You sent 200 pounds from your wallet to Nora."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Wallet funds moved successfully to account holder Karim."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The peer payment left your balance and reached Hana."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A completed remittance of 75 pounds went out to your brother."
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The wallet could not send money to Omar because the attempt did not finish."
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Transfer request to Layla was rejected. No value moved."
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "We were unable to move wallet funds to the recipient."
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Outgoing remittance did not go through. The recipient received nothing."
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Sorry, there is not enough balance to renew the Plus 6000 package. Please add EGP 65."
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The monthly plan continuation was declined. Funds available are insufficient for the 65 pound bundle."
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "We could not extend your subscription. The remaining credit is short."
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Bundle continuation stopped. Please top up before the service can continue."
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your bundle is active again after the scheduled continuation."
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The monthly plan continued successfully and the service remains available."
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Subscription extension finished. Access stays open for another cycle."
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The package period rolled forward and the service is live."
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Remaining credit on the wallet stands at 40 pounds."
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Here is what is currently available: 1,250 pounds."
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Snapshot of funds sitting in the account: eighty pounds."
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "No activity, just a note that the available amount is 15.50 pounds."
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "This weekend only, enjoy a special deal when you visit."
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Exclusive invitation: a limited campaign is waiting."
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Unlock a bonus by entering the campaign token at checkout."
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Marketing note: a seasonal advantage is available if you opt in."
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Use 482193 as the single-use secret to approve the session."
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "A temporary passcode was issued for sign-in: 119900."
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Do not share the login verifier 554433 with anyone."
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Security challenge for the app session is 908172."
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "The store returned 75 pounds to you after the return was accepted."
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Money came back from the merchant following a return."
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "A credit was issued by the shop for the returned item."
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "You received the purchase amount back from the seller."
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "The earlier posting was undone and the amount was put back."
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "We cancelled the previous posting and restored the sum."
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "The transaction was voided and the funds were restored."
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "An earlier debit was undone by the issuer."
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "An administrative charge of 5 pounds was added to the account."
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The institution levied a small charge for the service."
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A maintenance cost of five pounds has been taken."
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Banking charges totaling 5 pounds were assessed."
+  },
+  {
+    "name": "transfer_in",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "A sum from your cousin has now arrived."
+  },
+  {
+    "name": "transfer_in",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Incoming value from Nora posted on your side."
+  },
+  {
+    "name": "cash_withdrawal",
+    "transactionClass": "CASH_WITHDRAWAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Banknotes came out of the machine for you."
+  },
+  {
+    "name": "cash_withdrawal",
+    "transactionClass": "CASH_WITHDRAWAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "You took physical notes from the automated dispenser."
+  },
+  {
+    "name": "payment",
+    "transactionClass": "PAYMENT",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The clinic invoice is closed after you settled it."
+  },
+  {
+    "name": "payment",
+    "transactionClass": "PAYMENT",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Rent reached the landlord and the bill is done."
+  },
+  {
+    "name": "service_recharge",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Talk time on the line increased after a successful refill."
+  },
+  {
+    "name": "service_recharge",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The prepaid handset received its airtime."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The spare key is under the mat."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Lunch is at noon, bring a notebook."
+  },
+  {
+    "name": "payment_due",
+    "transactionClass": "PAYMENT_DUE",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Kindly note the open invoice. Settlement is still in the future."
+  },
+  {
+    "name": "payment_due",
+    "transactionClass": "PAYMENT_DUE",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "A reminder arrived that the amount remains unpaid."
+  },
+  {
+    "name": "statement",
+    "transactionClass": "STATEMENT",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The period summary is ready to open."
+  },
+  {
+    "name": "statement",
+    "transactionClass": "STATEMENT",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "An account recap was generated and contains no new debit."
+  }
+]

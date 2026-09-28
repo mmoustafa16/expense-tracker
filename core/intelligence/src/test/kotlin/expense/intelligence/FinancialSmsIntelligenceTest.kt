@@ -173,7 +173,7 @@ class FinancialSmsIntelligenceTest {
 
         val lying = FinancialSmsIntelligence(
             discovery = BankDiscovery { BankDiscoveryResult.unknown() },
-            classifier = DeterministicTransactionClassifier(),
+            classifier = SemanticTransactionClassifier.bundled(),
             extractor = FinancialEntityExtractor {
                 ExtractedEntities(
                     amount = Money(99900, Currency.EGP),

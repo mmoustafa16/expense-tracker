@@ -69,15 +69,31 @@ data class RegisteredSender(
     val senderIds: Set<String>,
 )
 
+/**
+ * Meaning of the whole SMS, produced by the on-device semantic model.
+ * [intent] is the model's label. The ledger still reads [Classification.type].
+ * [moneyMovement] means a completed movement the ledger may record.
+ */
+data class SmsSemantics(
+    val intent: String,
+    val transactionCompleted: Boolean,
+    val moneyMovement: Boolean,
+    val direction: MoneyDirection?,
+    val confidence: Int,
+)
+
 data class Classification(
     val type: TransactionClass,
     val confidence: Int,
     val ambiguous: Boolean,
+    val semantics: SmsSemantics? = null,
 )
 
 /**
- * Assigns a transaction class and a confidence score.
- * A later on-device model can implement this without changing the ledger.
+ * Assigns a transaction class from the meaning of the whole message.
+ * The bundled implementation is an on-device model. Another model can
+ * implement this without changing discovery, validation, or the ledger.
+ * Implementations must not send the SMS off the device or log its body.
  */
 fun interface TransactionClassifier {
     fun classify(message: SmsText): Classification

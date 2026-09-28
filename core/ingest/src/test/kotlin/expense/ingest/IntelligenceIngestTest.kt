@@ -4,7 +4,7 @@ import expense.ingest.fixture.SyntheticBankProfile
 import expense.intelligence.AmountRole
 import expense.intelligence.BankDiscovery
 import expense.intelligence.BankDiscoveryResult
-import expense.intelligence.DeterministicTransactionClassifier
+import expense.intelligence.SemanticTransactionClassifier
 import expense.intelligence.RegisteredSender
 import expense.intelligence.DeterministicTransactionValidator
 import expense.intelligence.ExtractedEntities
@@ -118,7 +118,7 @@ class IntelligenceIngestTest {
     fun `a contradictory extraction stays in review`() {
         val lying = FinancialSmsIntelligence(
             discovery = BankDiscovery { BankDiscoveryResult.unknown() },
-            classifier = DeterministicTransactionClassifier(),
+            classifier = SemanticTransactionClassifier.bundled(),
             extractor = FinancialEntityExtractor {
                 ExtractedEntities(
                     amount = Money(99900, Currency.EGP),

@@ -8,6 +8,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core:money"))
+    implementation(libs.org.json)
     testImplementation(libs.junit.jupiter)
 }
 

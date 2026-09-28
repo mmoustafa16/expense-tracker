@@ -8,98 +8,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
-class DeterministicTransactionClassifier : TransactionClassifier {
-    override fun classify(message: SmsText): Classification {
-        val text = DigitFold.fold(message.body)
-        if (otp.containsMatchIn(text)) return Classification(TransactionClass.OTP, 95, ambiguous = false)
-        if (mobileBalance.containsMatchIn(text)) {
-            return Classification(TransactionClass.BALANCE_NOTIFICATION, 90, ambiguous = false)
-        }
-        if (packageRenewal.containsMatchIn(text)) {
-            return Classification(TransactionClass.OTHER_NON_TRANSACTION, 90, ambiguous = false)
-        }
-        val transactions = transactionCues.filter { it.pattern.containsMatchIn(text) }
-        val specific = preferSpecific(transactions)
-        if (specific.isEmpty()) return nonTransaction(text)
-        val classes = specific.map { it.type }.toSet()
-        if (classes.size > 1) {
-            val top = specific.maxBy { it.weight }
-            return Classification(top.type, confidence = 45, ambiguous = true)
-        }
-        val chosen = specific.maxBy { it.weight }
-        return Classification(chosen.type, confidence = chosen.weight, ambiguous = false)
-    }
-
-    private fun nonTransaction(text: String): Classification {
-        val type = when {
-            promotion.containsMatchIn(text) -> TransactionClass.PROMOTION
-            statement.containsMatchIn(text) -> TransactionClass.STATEMENT
-            paymentDue.containsMatchIn(text) -> TransactionClass.PAYMENT_DUE
-            balance.containsMatchIn(text) -> TransactionClass.BALANCE_NOTIFICATION
-            else -> TransactionClass.OTHER_NON_TRANSACTION
-        }
-        val confidence = if (type == TransactionClass.OTHER_NON_TRANSACTION) 30 else 90
-        return Classification(type, confidence, ambiguous = false)
-    }
-
-    private fun preferSpecific(cues: List<Cue>): List<Cue> {
-        val types = cues.map { it.type }.toSet()
-        return cues.filter { cue ->
-            when (cue.type) {
-                TransactionClass.CARD_PURCHASE ->
-                    TransactionClass.FEE !in types &&
-                        TransactionClass.REFUND !in types &&
-                        TransactionClass.REVERSAL !in types &&
-                        TransactionClass.CASH_WITHDRAWAL !in types &&
-                        TransactionClass.TRANSFER !in types
-                TransactionClass.PAYMENT ->
-                    TransactionClass.CARD_PURCHASE !in types &&
-                        TransactionClass.TRANSFER !in types &&
-                        TransactionClass.FEE !in types
-                else -> true
-            }
-        }
-    }
-
-    private data class Cue(
-        val type: TransactionClass,
-        val pattern: Regex,
-        val weight: Int,
-    )
-
-    private companion object {
-        val otp = Regex(
-            """(?i)(\botp\b|one[\s-]*time\s+(password|passcode|code|pin)|verification\s+code|security\s+code|رمز التحقق|كود التحقق)""",
-        )
-        val mobileBalance = Regex(
-            """(?i)(\brecharg\w*\b|\btop[\s-]?ups?\b|\bairtime\b|\bmobile\s+balance\b|\bcredit\s+balance\b)""",
-        )
-        val packageRenewal = Regex(
-            """(?i)(\b(package|bundle|plan)\b.{0,40}\brenew\w*\b|\brenew\w*\b.{0,40}\b(package|bundle|plan)\b|\bsubscription\s+renew\w*\b)""",
-        )
-        val promotion = Regex(
-            """(?i)(\bsave\b|\bdiscount\b|\boffer\b|\bpromo\w*\b|\bmarketing\b|use\s+code|\bunsubscribe\b|limited\s+time|خصم\s*\d+\s*%)""",
-        )
-        val statement = Regex("""(?i)\bstatement\b|كشف حساب""")
-        val paymentDue = Regex("""(?i)\bpayment\s+due\b|\bpayment\s+reminder\b|مستحق""")
-        val balance = Regex("""(?i)\bbalance\b|الرصيد""")
-        val transactionCues = listOf(
-            Cue(TransactionClass.REVERSAL, Regex("""(?i)\b(reversal|reversed)\b|تم عكس"""), 90),
-            Cue(TransactionClass.REFUND, Regex("""(?i)\b(refund|refunded)\b|تم رد"""), 90),
-            Cue(TransactionClass.FEE, Regex("""(?i)\bfees?\b|رسوم"""), 88),
-            Cue(TransactionClass.CASH_WITHDRAWAL, Regex("""(?i)\b(cash\s+withdrawal|withdrew|withdrawn|atm\s+withdrawal)\b|سحب نقدي"""), 90),
-            Cue(TransactionClass.TRANSFER, Regex("""(?i)\b(transferred|transfer\s+of|transfer\s+to|transfer\s+from)\b|تم تحويل"""), 88),
-            Cue(
-                TransactionClass.CARD_PURCHASE,
-                Regex("""(?i)\b(charged|debited|purchased|purchase\s+of|purchase\s+at|card\s+purchase|spent|used\s+for)\b|card\s+was\s+used"""),
-                88,
-            ),
-            Cue(TransactionClass.CARD_PURCHASE, Regex("""تم خصم"""), 86),
-            Cue(TransactionClass.PAYMENT, Regex("""(?i)\b(payment\s+of|payment\s+to|bill\s+payment|paid)\b|تم دفع"""), 84),
-        )
-    }
-}
-
 class DeterministicEntityExtractor : FinancialEntityExtractor {
     override fun extract(message: SmsText): ExtractedEntities {
         val folded = DigitFold.fold(message.body)
@@ -253,9 +161,6 @@ class DeterministicTransactionValidator : TransactionValidator {
         if (!entities.reference.isNullOrBlank() && !folded.contains(entities.reference, ignoreCase = true)) {
             reasons += "reference_not_in_message"
         }
-        if (classification.type == TransactionClass.CARD_PURCHASE && !purchaseMovement.containsMatchIn(folded)) {
-            reasons += "purchase_without_movement"
-        }
         val forbidden = !classification.type.isLedgerCandidate()
         if (!forbidden) {
             if (entities.amount == null || entities.amountRole != AmountRole.TRANSACTION) reasons += "amount_missing"
@@ -272,8 +177,5 @@ class DeterministicTransactionValidator : TransactionValidator {
 
     private companion object {
         val supported = setOf("EGP", "USD", "EUR", "GBP")
-        val purchaseMovement = Regex(
-            """(?i)\b(charged|debited|purchased|purchase\s+of|purchase\s+at|card\s+purchase|spent|used\s+for)\b|card\s+was\s+used|تم خصم""",
-        )
     }
 }
