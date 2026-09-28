@@ -41,6 +41,19 @@ class SemanticClassificationTest {
     }
 
     @Test
+    fun `an arabic vodafone renewal attempt is not a completed money movement`() {
+        val body = "عفواً، رصيدك غير كافٍ لتجديد باقة Plus 6000. برجاء شحن 65 جنيه"
+        val fromCarrier = classifier.classify(SmsText("Vodafone", body))
+        val fromUnknown = classifier.classify(SmsText("UNKNOWN", body))
+        assertEquals(fromCarrier, fromUnknown)
+        assertEquals("renewal_attempt", fromCarrier.semantics?.intent)
+        assertFalse(fromCarrier.semantics!!.transactionCompleted)
+        assertFalse(fromCarrier.semantics!!.moneyMovement)
+        assertFalse(fromCarrier.type.isLedgerCandidate())
+        assertEquals(TransactionClass.OTHER_NON_TRANSACTION, fromCarrier.type)
+    }
+
+    @Test
     fun `held-out paraphrases follow intent rather than one shared phrase`() {
         val fixtures = JSONArray(read("semantic-fixtures.json"))
         val byIntent = linkedMapOf<String, MutableList<String>>()

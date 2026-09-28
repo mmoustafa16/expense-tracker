@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
 """Train the on-device SMS intent head.
 
-The encoder is minishlab/potion-base-8M: static token embeddings distilled
-from BAAI/bge-base-en-v1.5 (model2vec). Inference mean-pools every token in
-the message, L2-normalizes that vector, and applies a one-hidden-layer
-network. Nothing in this script is shipped as a runtime rule. Re-run it to
-replace the artifacts under src/main/resources without changing the pipeline.
+The encoder is minishlab/potion-multilingual-128M: static embeddings
+distilled from BAAI/bge-m3, covering Arabic, English, and mixed text.
+Inference mean-pools every token, L2-normalizes that vector, and applies a
+one-hidden-layer network. The shipped matrix keeps the multilingual rows
+needed for that tokenizer. Re-run this script to replace the artifacts.
 
-Requires: model2vec, numpy, scikit-learn.
+Requires: tokenizers, safetensors, numpy, scikit-learn.
 """
 
 from __future__ import annotations
 
 import json
+import sys
 import unicodedata
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import numpy as np
-from model2vec import StaticModel
 from sklearn.neural_network import MLPClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "src/main/resources/expense/intelligence/semantics"
 TEST = ROOT / "src/test/resources/expense/intelligence"
-MODEL_ID = "minishlab/potion-base-8M"
+MODEL_ID = "minishlab/potion-multilingual-128M"
 MAX_TOKENS = 512
 MEDIAN_TOKEN_LENGTH = 6
 UNK_ID = 1
@@ -166,8 +168,8 @@ def token_ids(text: str, vocab: dict[str, int]) -> list[int]:
     return ids[:MAX_TOKENS]
 
 
-def embed(text: str, vocab: dict[str, int], matrix: np.ndarray) -> np.ndarray:
-    ids = token_ids(text, vocab)
+def embed(text: str, tokenizer, matrix: np.ndarray) -> np.ndarray:
+    ids = tokenizer.runtime_ids(text, max_tokens=MAX_TOKENS, median=MEDIAN_TOKEN_LENGTH)
     if not ids:
         return np.zeros(matrix.shape[1], dtype=np.float32)
     vec = matrix[ids].astype(np.float32).mean(axis=0)
@@ -205,19 +207,40 @@ def schema(name: str) -> dict:
 
 
 def main() -> None:
-    model = StaticModel.from_pretrained(MODEL_ID)
-    vocab = load_vocab(model)
-    matrix = model.embedding.astype(np.float16).astype(np.float32)
+    from multilingual_tokenizer import UnigramTokenizer, load_tokenizer_json
+    from tokenizers import Tokenizer
+    from safetensors import safe_open
+    from huggingface_hub import hf_hub_download
+
     train, held, regression, generalize = corpus()
-    probe = [text for text, _ in train[:40]] + [text for text, _ in held] + [
-        "",
-        "  café  DON'T  ",
-        "تم خصم ٥ جنيه",
-        "hello\nمرحبا",
-        "EGP 1,250.00",
-    ]
-    check_tokenizer(model, vocab, probe)
-    print("tokenizer matches model2vec on", len(probe), "texts")
+    tokenizer_path = hf_hub_download(MODEL_ID, "tokenizer.json")
+    weights_path = hf_hub_download(MODEL_ID, "model.safetensors")
+    tokenizer_json = load_tokenizer_json(tokenizer_path)
+    hf = Tokenizer.from_file(tokenizer_path)
+    full_vocab = tokenizer_json["model"]["vocab"]
+    allowed = {1}
+    for index, (token, score) in enumerate(full_vocab):
+        if float(score) > -12 or _has_arabic(token) or len(token) <= 1:
+            allowed.add(index)
+    probe_texts = [text for text, _label in train + held + regression + generalize]
+    probe_texts += ["", "  café  DON'T  ", "hello\nمرحبا", "EGP 1,250.00", "🙂"]
+    for text in probe_texts:
+        for token_id in hf.encode(text, add_special_tokens=False).ids:
+            allowed.add(int(token_id))
+    tokenizer = UnigramTokenizer(tokenizer_json, allowed)
+    mismatches = []
+    for text in probe_texts:
+        expected = [int(token_id) for token_id in hf.encode(text, add_special_tokens=False).ids if int(token_id) != 1]
+        actual = tokenizer.token_ids(text, max_tokens=10_000, median=10_000)
+        if actual != expected:
+            mismatches.append(text)
+    if mismatches:
+        raise SystemExit(f"subset tokenizer diverged on {len(mismatches)} texts, first {mismatches[:3]!r}")
+    print("multilingual tokenizer matches bge-m3 on", len(probe_texts), "texts;", "kept", len(tokenizer.ids))
+    with safe_open(weights_path, framework="numpy") as handle:
+        full_matrix = handle.get_tensor("embeddings")
+    matrix = full_matrix[np.array(tokenizer.ids, dtype=np.int64)].astype(np.float16).astype(np.float32)
+    vocab = tokenizer
 
     names = list(LABELS)
     x_train = np.stack([embed(text, vocab, matrix) for text, _ in train])
@@ -322,12 +345,22 @@ def main() -> None:
 
     MAIN.mkdir(parents=True, exist_ok=True)
     TEST.mkdir(parents=True, exist_ok=True)
-    blob = model.embedding.astype(np.float16).tobytes()
+    blob = matrix.astype(np.float16).tobytes()
     (MAIN / "embeddings.f16").write_bytes(blob)
-    tokens = [""] * len(vocab)
-    for token, index in vocab.items():
-        tokens[index] = token
+    tokens = [token for token, _score in vocab.vocab]
+    scores = np.array([score for _token, score in vocab.vocab], dtype=np.float32)
     (MAIN / "vocab.json").write_text(json.dumps(tokens, ensure_ascii=False), encoding="utf-8")
+    (MAIN / "scores.f32").write_bytes(scores.tobytes())
+    import base64
+    precompiled = tokenizer_json["normalizer"]["normalizers"][0]["normalizers"][0]["precompiled_charsmap"]
+    (MAIN / "charsmap.bin").write_bytes(base64.b64decode(precompiled))
+    replacements = []
+    for pattern, content, is_regex in vocab.replacements:
+        replacements.append({"regex" if is_regex else "string": pattern, "content": content})
+    (MAIN / "normalizer.json").write_text(
+        json.dumps({"replacements": replacements, "strip": True}, ensure_ascii=False),
+        encoding="utf-8",
+    )
     head = {
         "temperature": temperature,
         "labels": ordered,
@@ -337,23 +370,23 @@ def main() -> None:
         "outputBias": output_b.astype(float).round(7).tolist(),
     }
     (MAIN / "head.json").write_text(json.dumps(head), encoding="utf-8")
-    probe_index = vocab["the"]
     manifest = {
-        "id": "potion-base-8m-sms-intents-v1",
+        "id": "potion-multilingual-128m-sms-intents-v1",
         "encoder": MODEL_ID,
-        "encoderBase": "BAAI/bge-base-en-v1.5",
-        "method": "mean-pooled static semantic embedding plus a one-hidden-layer classifier",
+        "encoderBase": "BAAI/bge-m3",
+        "languages": ["Arabic", "English", "mixed Arabic/English"],
+        "method": "mean-pooled multilingual static embedding plus a one-hidden-layer classifier",
         "dim": int(matrix.shape[1]),
         "vocabSize": len(tokens),
         "maxTokens": MAX_TOKENS,
         "medianTokenLength": MEDIAN_TOKEN_LENGTH,
-        "unkId": UNK_ID,
+        "unkId": vocab.unk_local,
         "normalize": True,
         "embeddingDtype": "float16",
         "temperature": temperature,
-        "probeToken": "the",
-        "probeIndex": probe_index,
-        "probeValues": [float(x) for x in matrix[probe_index, :4]],
+        "probeToken": tokens[min(20, len(tokens) - 1)],
+        "probeIndex": min(20, len(tokens) - 1),
+        "probeValues": [float(x) for x in matrix[min(20, matrix.shape[0] - 1), :4]],
     }
     (MAIN / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     fixtures = []
@@ -362,25 +395,50 @@ def main() -> None:
         spec["text"] = text
         fixtures.append(spec)
     (TEST / "semantic-fixtures.json").write_text(json.dumps(fixtures, indent=2, ensure_ascii=False), encoding="utf-8")
+    from multilingual_corpus import DEVICE_RENEWAL
+
     golden = []
     for text in [
         "Your card was used to purchase EGP 65 at XYZ.",
         "Sorry, there is not enough balance to renew the Plus 6000 package. Please add EGP 65.",
+        DEVICE_RENEWAL,
         "café",
+        "ﬁle ①",
+        "hello\nمرحبا",
+        "EGP 1,250.00",
         "",
     ]:
-        golden.append({"text": text, "ids": token_ids(text, vocab)})
+        golden.append({"text": text, "ids": vocab.runtime_ids(text)})
     (TEST / "tokenizer-golden.json").write_text(json.dumps(golden, ensure_ascii=False), encoding="utf-8")
     print("wrote", MAIN, "embeddings", len(blob), "bytes")
 
 
+def _has_arabic(token: str) -> bool:
+    return any(
+        "\u0600" <= char <= "\u06FF"
+        or "\u0750" <= char <= "\u077F"
+        or "\u08A0" <= char <= "\u08FF"
+        or "\uFB50" <= char <= "\uFDFF"
+        or "\uFE70" <= char <= "\uFEFF"
+        for char in token
+    )
+
+
 def corpus() -> tuple[list, list, list, list]:
+    from multilingual_corpus import EXTRA_HELD, EXTRA_TRAIN
+
+    train_map = {label: list(texts) for label, texts in TRAIN.items()}
+    held_map = {label: list(texts) for label, texts in HELD.items()}
+    for label, texts in EXTRA_TRAIN.items():
+        train_map.setdefault(label, []).extend(texts)
+    for label, texts in EXTRA_HELD.items():
+        held_map.setdefault(label, []).extend(texts)
     train = []
-    for label, texts in TRAIN.items():
+    for label, texts in train_map.items():
         copies = 3 if label == "other" else 1
         for _ in range(copies):
             train.extend((text, label) for text in texts)
-    held = [(text, label) for label, texts in HELD.items() for text in texts]
+    held = [(text, label) for label, texts in held_map.items() for text in texts]
     regression = [(text, label) for label, texts in REGRESSION.items() for text in texts]
     generalize = [(text, "card_purchase") for text in GENERALIZE]
     train_texts = {text for text, _ in train}

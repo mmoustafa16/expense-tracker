@@ -1,22 +1,27 @@
 {
-  "id": "potion-base-8m-sms-intents-v1",
-  "encoder": "minishlab/potion-base-8M",
-  "encoderBase": "BAAI/bge-base-en-v1.5",
-  "method": "mean-pooled static semantic embedding plus a one-hidden-layer classifier",
+  "id": "potion-multilingual-128m-sms-intents-v1",
+  "encoder": "minishlab/potion-multilingual-128M",
+  "encoderBase": "BAAI/bge-m3",
+  "languages": [
+    "Arabic",
+    "English",
+    "mixed Arabic/English"
+  ],
+  "method": "mean-pooled multilingual static embedding plus a one-hidden-layer classifier",
   "dim": 256,
-  "vocabSize": 29528,
+  "vocabSize": 59699,
   "maxTokens": 512,
   "medianTokenLength": 6,
-  "unkId": 1,
+  "unkId": 0,
   "normalize": true,
   "embeddingDtype": "float16",
-  "temperature": 0.7,
-  "probeToken": "the",
-  "probeIndex": 1002,
+  "temperature": 0.15,
+  "probeToken": "\u2581in",
+  "probeIndex": 20,
   "probeValues": [
-    -0.06707763671875,
-    -0.20654296875,
-    0.05267333984375,
-    0.372314453125
+    0.1224365234375,
+    -0.1124267578125,
+    0.11322021484375,
+    0.237548828125
   ]
 }

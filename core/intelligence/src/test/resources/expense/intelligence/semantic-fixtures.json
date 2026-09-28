@@ -36,6 +36,42 @@
     "text": "The retailer collected 90 dirhams through your linked card."
   },
   {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "تم استخدام بطاقتك لشراء مبلغ 65 جنيه لدى المتجر"
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "اكتملت حركة البطاقة في المكتبة مقابل 18 جنيهاً"
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "المتجر حصل 90 درهماً عبر بطاقتك المرتبطة"
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The retailer collected the amount through بطاقتك بنجاح"
+  },
+  {
     "name": "failed_card_purchase",
     "transactionClass": "OTHER_NON_TRANSACTION",
     "transactionCompleted": false,
@@ -70,6 +106,42 @@
     "direction": null,
     "ambiguous": false,
     "text": "Merchant request was rejected by the issuer. Nothing was collected."
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "حاول المتجر أخذ المبلغ من البطاقة لكن المحاولة رُفضت"
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "تفويض البطاقة فشل قبل أن يغادر أي مبلغ الحساب"
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "لم يُسجل خصم. الدفع عند الكشك لم يكتمل"
+  },
+  {
+    "name": "failed_card_purchase",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Merchant request rejected ولم يُحصل شيء من البطاقة"
   },
   {
     "name": "transfer_out",
@@ -108,6 +180,42 @@
     "text": "A completed remittance of 75 pounds went out to your brother."
   },
   {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أرسلت 200 جنيه من محفظتك إلى نورا"
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أموال المحفظة انتقلت بنجاح إلى صاحب الحساب كريم"
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "التحويل بين الأفراد خرج من رصيدك ووصل هناء"
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A completed remittance ذهب إلى أخيك من المحفظة"
+  },
+  {
     "name": "failed_transfer",
     "transactionClass": "OTHER_NON_TRANSACTION",
     "transactionCompleted": false,
@@ -142,6 +250,42 @@
     "direction": null,
     "ambiguous": false,
     "text": "Outgoing remittance did not go through. The recipient received nothing."
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "المحفظة لم تستطع إرسال المال إلى عمر لأن المحاولة لم تنته"
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "طلب التحويل إلى ليلى رُفض ولم تتحرك قيمة"
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "تعذر نقل أموال المحفظة إلى المستلم"
+  },
+  {
+    "name": "failed_transfer",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Outgoing remittance did not go through والمستلم لم يستلم شيئاً"
   },
   {
     "name": "renewal_attempt",
@@ -180,6 +324,51 @@
     "text": "Bundle continuation stopped. Please top up before the service can continue."
   },
   {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "عفواً، رصيدك غير كافٍ لتجديد باقة Plus 6000. برجاء شحن 65 جنيه"
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "فشل تجديد الباقة لعدم كفاية الرصيد. يرجى إعادة الشحن"
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Plus 6000 لم يتم تجديدها لأن الرصيد غير كافٍ، اشحن 65 جنيه"
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "استمرار الباقة توقف. اشحن الخط قبل أن تعود الخدمة"
+  },
+  {
+    "name": "renewal_attempt",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "The bundle could not renew لأن الرصيد أقل من 65 جنيه"
+  },
+  {
     "name": "renewal_success",
     "transactionClass": "OTHER_NON_TRANSACTION",
     "transactionCompleted": true,
@@ -214,6 +403,42 @@
     "direction": null,
     "ambiguous": false,
     "text": "The package period rolled forward and the service is live."
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "تم تجديد باقتك بنجاح"
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "الباقة عادت للعمل بعد الاستمرار المجدول"
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "الخطة الشهرية استمرت بنجاح والخدمة متاحة"
+  },
+  {
+    "name": "renewal_success",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Subscription extension finished والدورة الجديدة مفتوحة"
   },
   {
     "name": "balance",
@@ -252,6 +477,42 @@
     "text": "No activity, just a note that the available amount is 15.50 pounds."
   },
   {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "رصيد المحفظة الحالي 40 جنيهاً وهذا للعلم"
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "المتاح الآن: 1250 جنيهاً دون حركة"
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "لقطة للمبلغ الموجود في الحساب: ثمانون جنيهاً"
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "No activity, المتاح 15.50 جنيه فقط كإشعار"
+  },
+  {
     "name": "promotion",
     "transactionClass": "PROMOTION",
     "transactionCompleted": false,
@@ -286,6 +547,42 @@
     "direction": null,
     "ambiguous": false,
     "text": "Marketing note: a seasonal advantage is available if you opt in."
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "هذا الأسبوع فقط استمتع بعرض خاص عند الزيارة"
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "دعوة حصرية: حملة محدودة بانتظارك"
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "افتح الميزة بإدخال رمز الحملة"
+  },
+  {
+    "name": "promotion",
+    "transactionClass": "PROMOTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Marketing note: ميزة موسمية إذا اخترت المشاركة"
   },
   {
     "name": "otp",
@@ -324,6 +621,42 @@
     "text": "Security challenge for the app session is 908172."
   },
   {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "استخدم 482193 كرمز سري لمرة واحدة للموافقة على الجلسة"
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "أُصدر رمز مؤقت للدخول: 119900"
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "لا تشارك محقق الدخول 554433 مع أي شخص"
+  },
+  {
+    "name": "otp",
+    "transactionClass": "OTP",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Security challenge للجلسة هو 908172"
+  },
+  {
     "name": "refund",
     "transactionClass": "REFUND",
     "transactionCompleted": true,
@@ -358,6 +691,42 @@
     "direction": "CREDIT",
     "ambiguous": false,
     "text": "You received the purchase amount back from the seller."
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "أعاد المتجر 75 جنيهاً بعد قبول المرتجع"
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "عاد المال من التاجر بعد الإرجاع"
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "أصدر المتجر ائتماناً مقابل الصنف المرجع"
+  },
+  {
+    "name": "refund",
+    "transactionClass": "REFUND",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "You received the purchase amount back من البائع"
   },
   {
     "name": "reversal",
@@ -396,6 +765,42 @@
     "text": "An earlier debit was undone by the issuer."
   },
   {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "القيد السابق أُلغي وأُعيد المبلغ"
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "ألغينا القيد السابق واستعدنا القيمة"
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "أُبطلت العملية وعادت الأموال"
+  },
+  {
+    "name": "reversal",
+    "transactionClass": "REVERSAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "An earlier debit was undone بواسطة البنك"
+  },
+  {
     "name": "fee",
     "transactionClass": "FEE",
     "transactionCompleted": true,
@@ -432,6 +837,42 @@
     "text": "Banking charges totaling 5 pounds were assessed."
   },
   {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أُضيف رسم إداري 5 جنيهات إلى الحساب"
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "فرضت المؤسسة رسماً صغيراً مقابل الخدمة"
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "مُحصّل تكلفة صيانة خمسة جنيهات"
+  },
+  {
+    "name": "fee",
+    "transactionClass": "FEE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Banking charges بقيمة 5 جنيهات قُيدت"
+  },
+  {
     "name": "transfer_in",
     "transactionClass": "TRANSFER",
     "transactionCompleted": true,
@@ -448,6 +889,24 @@
     "direction": "CREDIT",
     "ambiguous": false,
     "text": "Incoming value from Nora posted on your side."
+  },
+  {
+    "name": "transfer_in",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "مبلغ من ابن عمك وصل الآن"
+  },
+  {
+    "name": "transfer_in",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Incoming value from Nora وصل إلى جانبك"
   },
   {
     "name": "cash_withdrawal",
@@ -468,6 +927,24 @@
     "text": "You took physical notes from the automated dispenser."
   },
   {
+    "name": "cash_withdrawal",
+    "transactionClass": "CASH_WITHDRAWAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "خرجت أوراق نقدية من الماكينة إليك"
+  },
+  {
+    "name": "cash_withdrawal",
+    "transactionClass": "CASH_WITHDRAWAL",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أخذت نقداً من جهاز الصرف"
+  },
+  {
     "name": "payment",
     "transactionClass": "PAYMENT",
     "transactionCompleted": true,
@@ -484,6 +961,24 @@
     "direction": "DEBIT",
     "ambiguous": false,
     "text": "Rent reached the landlord and the bill is done."
+  },
+  {
+    "name": "payment",
+    "transactionClass": "PAYMENT",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "فاتورة العيادة أُغلقت بعد أن سددتها"
+  },
+  {
+    "name": "payment",
+    "transactionClass": "PAYMENT",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "الإيجار وصل المالك والفاتورة انتهت"
   },
   {
     "name": "service_recharge",
@@ -504,6 +999,24 @@
     "text": "The prepaid handset received its airtime."
   },
   {
+    "name": "service_recharge",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "زاد وقت المكالمات بعد تعبئة ناجحة للخط"
+  },
+  {
+    "name": "service_recharge",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": true,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "الخط المدفوع مسبقاً استلم رصيد مكالمات"
+  },
+  {
     "name": "other",
     "transactionClass": "OTHER_NON_TRANSACTION",
     "transactionCompleted": false,
@@ -520,6 +1033,24 @@
     "direction": null,
     "ambiguous": false,
     "text": "Lunch is at noon, bring a notebook."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "المفتاح تحت السجادة في المدخل"
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "الغدا الساعة اتنين وهات معاك دفتر"
   },
   {
     "name": "payment_due",
@@ -540,6 +1071,24 @@
     "text": "A reminder arrived that the amount remains unpaid."
   },
   {
+    "name": "payment_due",
+    "transactionClass": "PAYMENT_DUE",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "الفاتورة ما زالت مفتوحة والتسوية لاحقة"
+  },
+  {
+    "name": "payment_due",
+    "transactionClass": "PAYMENT_DUE",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "تذكير وصل بأن المبلغ لم يُسدد بعد"
+  },
+  {
     "name": "statement",
     "transactionClass": "STATEMENT",
     "transactionCompleted": false,
@@ -556,5 +1105,41 @@
     "direction": null,
     "ambiguous": false,
     "text": "An account recap was generated and contains no new debit."
+  },
+  {
+    "name": "statement",
+    "transactionClass": "STATEMENT",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "ملخص الفترة جاهز للفتح"
+  },
+  {
+    "name": "statement",
+    "transactionClass": "STATEMENT",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "أُنشئ كشف للحساب بلا خصم جديد"
+  },
+  {
+    "name": "ambiguous_movement",
+    "transactionClass": "REFUND",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": true,
+    "text": "لا نستطيع تحديد هل هذا مرتجع أم إلغاء قيد"
+  },
+  {
+    "name": "ambiguous_movement",
+    "transactionClass": "REFUND",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": true,
+    "text": "Either a return or a void تم تطبيقه"
   }
 ]
