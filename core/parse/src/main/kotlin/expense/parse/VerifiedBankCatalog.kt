@@ -1,13 +1,14 @@
 package expense.parse
 
 /**
- * Production bank profiles. Sender matching reads only this list.
- * A profile is a deterministic high-confidence template validator and a
- * fallback parser. It is not the only way an SMS is understood.
+ * Optional template profiles. The intelligence pipeline understands an SMS
+ * without one of these. A profile is a high-confidence template check, not
+ * a required parser and not a special case for one institution.
  *
- * Add a [BankProfile] here only after its sender ids and templates have been
- * verified against fixtures the account holder supplied. Do not guess a
- * sender id. An unknown sender stays unknown and cannot post to the ledger.
+ * Sender authorization for institutions that have no template lives in
+ * the intelligence bootstrap records. Add a sender alias only after it was
+ * copied from the device. Do not guess one. An unknown sender stays unknown
+ * and cannot post to the ledger.
  */
 object VerifiedBankCatalog {
     fun registry(): BankRegistry = BankRegistry(profiles)

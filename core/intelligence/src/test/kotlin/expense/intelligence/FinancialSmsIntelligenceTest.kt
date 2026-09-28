@@ -17,10 +17,13 @@ class FinancialSmsIntelligenceTest {
 
     @Test
     fun `an unregistered sender stays unknown`() {
-        val decision = intelligence.assess(SmsText("CIB", "Charged EGP 10.00 at Shop"))
-        assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status)
-        assertTrue(decision.discovery.candidates.isEmpty())
-        assertNull(decision.discovery.verifiedInstitution)
+        assertTrue(InstitutionBootstrap.records.isEmpty())
+        listOf("CIB", "ALEXBANK", "Vodafone", "SOMEBANK").forEach { sender ->
+            val decision = intelligence.assess(SmsText(sender, "Charged EGP 10.00 at Shop"))
+            assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status, sender)
+            assertTrue(decision.discovery.candidates.isEmpty())
+            assertNull(decision.discovery.verifiedInstitution)
+        }
     }
 
     @Test

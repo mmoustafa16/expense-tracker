@@ -10,8 +10,10 @@ package expense.intelligence
  * high-confidence transaction. Evidence, metadata, and a user confirmation
  * can name an institution, and an unknown or ambiguous result stays in review.
  *
- * A future small on-device model can replace discovery, the classifier, or
- * the extractor. This type does not call a cloud model or send the SMS anywhere.
+ * A future on-device model replaces the classifier and extractor through
+ * [replacing]. Discovery, validation, and the ledger rules stay in place.
+ * This type does not call a cloud model or send the SMS anywhere.
+ * Institutions are [InstitutionBootstrap] records, not branches in this class.
  */
 class FinancialSmsIntelligence(
     private val discovery: BankDiscovery,
@@ -73,7 +75,28 @@ class FinancialSmsIntelligence(
         private val incomingTransfer = Regex("""(?i)\b(received|incoming)\b|\btransfer\s+in\b""")
 
         fun deterministic(
-            senders: List<RegisteredSender> = emptyList(),
+            senders: List<RegisteredSender> = InstitutionBootstrap.records,
+            userConfirmed: List<UserConfirmedSender> = emptyList(),
+            evidence: List<LocalInstitutionEvidence> = emptyList(),
+        ): FinancialSmsIntelligence {
+            return replacing(
+                classifier = DeterministicTransactionClassifier(),
+                extractor = DeterministicEntityExtractor(),
+                senders = senders,
+                userConfirmed = userConfirmed,
+                evidence = evidence,
+            )
+        }
+
+        /**
+         * Same discovery, validation, and ledger rules with a different
+         * classifier and extractor. An on-device model plugs in here.
+         * There is no network call.
+         */
+        fun replacing(
+            classifier: TransactionClassifier,
+            extractor: FinancialEntityExtractor,
+            senders: List<RegisteredSender> = InstitutionBootstrap.records,
             userConfirmed: List<UserConfirmedSender> = emptyList(),
             evidence: List<LocalInstitutionEvidence> = emptyList(),
         ): FinancialSmsIntelligence {
@@ -88,8 +111,8 @@ class FinancialSmsIntelligence(
                         LocalLearnedPatterns(),
                     ),
                 ),
-                classifier = DeterministicTransactionClassifier(),
-                extractor = DeterministicEntityExtractor(),
+                classifier = classifier,
+                extractor = extractor,
                 validator = DeterministicTransactionValidator(),
             )
         }

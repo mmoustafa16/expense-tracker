@@ -11,6 +11,7 @@ import expense.merchants.AliasSource
 import expense.intelligence.AmountRole
 import expense.intelligence.ClassificationDecision
 import expense.intelligence.FinancialSmsIntelligence
+import expense.intelligence.InstitutionBootstrap
 import expense.intelligence.MoneyDirection
 import expense.intelligence.RegisteredSender
 import expense.intelligence.SmsText
@@ -33,13 +34,16 @@ import expense.sms.SmsSource
 
 /**
  * Bank-agnostic ingest. [registry] defaults to [BankRegistry.EMPTY].
+ * Every institution, including ones not on this device, uses the same
+ * discovery, classification, extraction, and validation pipeline.
  * SMS capture adapters and storage implementations sit outside this type.
  */
 class IngestPipeline(
     private val registry: BankRegistry = BankRegistry.EMPTY,
     private val ids: IdGenerator = UuidIdGenerator,
     private val intelligence: FinancialSmsIntelligence = FinancialSmsIntelligence.deterministic(
-        registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) },
+        registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) } +
+            InstitutionBootstrap.records,
     ),
 ) {
     private val matcher = BankMatcher(registry)
