@@ -13,7 +13,10 @@ object FinancialSignal {
     private val latinCurrency = Regex("""(?i)\b(EGP|USD|EUR|GBP|LE)\b""")
     private val arabicCurrencies = listOf("ج.م", "جنيه", "دولار", "يورو")
     private val oneTimeSecret = Regex(
-        """(?i)(\botp\b|one[\s-]*time\s+(password|passcode|code|pin)|verification\s+code|رمز التحقق|كود التحقق|كلمة السر|كلمة المرور)""",
+        """(?i)(\botp\b|one[\s-]*time\s+(password|passcode|code|pin)|verification\s+code|security\s+code|رمز التحقق|كود التحقق|كلمة السر|كلمة المرور)""",
+    )
+    private val serviceNotice = Regex(
+        """(?i)(\brecharg\w*\b|\btop[\s-]?ups?\b|\bairtime\b|\bmobile\s+balance\b|\bcredit\s+balance\b|\b(package|bundle|plan)\b.{0,40}\brenew\w*\b|\brenew\w*\b.{0,40}\b(package|bundle|plan)\b|\bsubscription\s+renew\w*\b)""",
     )
     private val completedMovement = listOf(
         Regex("""(?i)\bcharged\b"""),
@@ -52,6 +55,7 @@ object FinancialSignal {
     fun present(body: String): Boolean {
         val folded = DigitFold.fold(body)
         if (oneTimeSecret.containsMatchIn(folded)) return false
+        if (serviceNotice.containsMatchIn(folded)) return false
         if (!mentionsMoney(folded)) return false
         if (completedMovement.any { it.containsMatchIn(folded) }) return true
         return arabicMovement.any { folded.contains(it) }

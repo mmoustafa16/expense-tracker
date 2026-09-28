@@ -187,10 +187,13 @@ class IngestPipeline(
 
     private fun interpret(sms: InboundSms, assessment: ClassificationDecision): Interpretation {
         val matched = matcher.match(sms.sender)
+        val profile = matched.singleOrNull()
+        if (nonFinancial(assessment)) {
+            return Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false, profile = profile)
+        }
         if (matched.size > 1) {
             return Interpretation(status = ParseStatus.AMBIGUOUS, retainBody = true)
         }
-        val profile = matched.singleOrNull()
         if (profile != null) {
             when (val execution = TemplateRunner.execute(profile, sms)) {
                 is TemplateExecution.ExtractorFailed -> return Interpretation(
@@ -225,6 +228,12 @@ class IngestPipeline(
             return Interpretation(status = ParseStatus.UNSUPPORTED, retainBody = true, profile = profile)
         }
         return Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false, profile = profile)
+    }
+
+    /** Sender identity does not keep a non-financial message. */
+    private fun nonFinancial(assessment: ClassificationDecision): Boolean {
+        return !assessment.classification.type.isLedgerCandidate() &&
+            assessment.classification.confidence >= FinancialSmsIntelligence.HIGH_CONFIDENCE
     }
 
     private fun contradicts(assessment: ClassificationDecision, extraction: Extraction): Boolean {

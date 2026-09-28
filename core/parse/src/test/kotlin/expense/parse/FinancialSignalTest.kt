@@ -43,6 +43,10 @@ class FinancialSignalTest {
         assertFalse(FinancialSignal.present("Payment due EGP 500"))
         assertFalse(FinancialSignal.present("Your card ending 4242 was activated"))
         assertFalse(FinancialSignal.present("Payment reminder: EGP 80 is due"))
+        assertFalse(FinancialSignal.present("Your mobile balance is EGP 15.50"))
+        assertFalse(FinancialSignal.present("Recharge successful. You recharged EGP 50"))
+        assertFalse(FinancialSignal.present("You paid EGP 30 to renew your monthly package"))
+        assertFalse(FinancialSignal.present("Your security code is 119900"))
     }
 
     @Test

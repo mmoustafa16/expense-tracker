@@ -12,6 +12,12 @@ class DeterministicTransactionClassifier : TransactionClassifier {
     override fun classify(message: SmsText): Classification {
         val text = DigitFold.fold(message.body)
         if (otp.containsMatchIn(text)) return Classification(TransactionClass.OTP, 95, ambiguous = false)
+        if (mobileBalance.containsMatchIn(text)) {
+            return Classification(TransactionClass.BALANCE_NOTIFICATION, 90, ambiguous = false)
+        }
+        if (packageRenewal.containsMatchIn(text)) {
+            return Classification(TransactionClass.OTHER_NON_TRANSACTION, 90, ambiguous = false)
+        }
         val transactions = transactionCues.filter { it.pattern.containsMatchIn(text) }
         val specific = preferSpecific(transactions)
         if (specific.isEmpty()) return nonTransaction(text)
@@ -63,12 +69,20 @@ class DeterministicTransactionClassifier : TransactionClassifier {
 
     private companion object {
         val otp = Regex(
-            """(?i)(\botp\b|one[\s-]*time\s+(password|passcode|code|pin)|verification\s+code|رمز التحقق|كود التحقق)""",
+            """(?i)(\botp\b|one[\s-]*time\s+(password|passcode|code|pin)|verification\s+code|security\s+code|رمز التحقق|كود التحقق)""",
         )
-        val promotion = Regex("""(?i)(\bsave\b|\bdiscount\b|\boffer\b|\bpromo\b|use\s+code|خصم\s*\d+\s*%)""")
+        val mobileBalance = Regex(
+            """(?i)(\brecharg\w*\b|\btop[\s-]?ups?\b|\bairtime\b|\bmobile\s+balance\b|\bcredit\s+balance\b)""",
+        )
+        val packageRenewal = Regex(
+            """(?i)(\b(package|bundle|plan)\b.{0,40}\brenew\w*\b|\brenew\w*\b.{0,40}\b(package|bundle|plan)\b|\bsubscription\s+renew\w*\b)""",
+        )
+        val promotion = Regex(
+            """(?i)(\bsave\b|\bdiscount\b|\boffer\b|\bpromo\w*\b|\bmarketing\b|use\s+code|\bunsubscribe\b|limited\s+time|خصم\s*\d+\s*%)""",
+        )
         val statement = Regex("""(?i)\bstatement\b|كشف حساب""")
         val paymentDue = Regex("""(?i)\bpayment\s+due\b|\bpayment\s+reminder\b|مستحق""")
-        val balance = Regex("""(?i)\b(available\s+balance|balance\s+is|account\s+balance)\b|الرصيد""")
+        val balance = Regex("""(?i)\bbalance\b|الرصيد""")
         val transactionCues = listOf(
             Cue(TransactionClass.REVERSAL, Regex("""(?i)\b(reversal|reversed)\b|تم عكس"""), 90),
             Cue(TransactionClass.REFUND, Regex("""(?i)\b(refund|refunded)\b|تم رد"""), 90),
