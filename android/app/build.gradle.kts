@@ -14,6 +14,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -53,6 +54,9 @@ dependencies {
     implementation(project(":android:ui-search"))
     implementation(project(":android:ui-analytics"))
     implementation(libs.activity.compose)
+    // Biometric 1.1.0 pins Fragment 1.2.5, which rejects Activity Result
+    // permission request codes (they are always >= 65536).
+    implementation(libs.androidx.fragment)
     implementation(libs.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(platform(libs.compose.bom))
@@ -61,4 +65,6 @@ dependencies {
     implementation(libs.compose.icons)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.sqldelight.sqlite.driver)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }

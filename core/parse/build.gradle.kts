@@ -7,7 +7,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":core:money"))
+    api(project(":core:money"))
     implementation(project(":core:sms"))
     testImplementation(libs.junit.jupiter)
 }

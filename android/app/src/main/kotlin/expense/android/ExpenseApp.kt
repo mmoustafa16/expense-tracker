@@ -10,7 +10,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -19,10 +18,15 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -38,6 +42,8 @@ import expense.android.ui.analytics.AnalyticsRoute
 import expense.android.ui.ledger.AccountRoute
 import expense.android.ui.ledger.CategoriesRoute
 import expense.android.ui.ledger.LedgerRoute
+import expense.android.ui.ledger.LedgerScanMetric
+import expense.android.ui.ledger.LedgerScanSummary
 import expense.android.ui.ledger.TransactionRoute
 import expense.android.ui.review.ManualTransactionRoute
 import expense.android.ui.review.ReviewRoute
@@ -56,6 +62,7 @@ private object Routes {
     const val Account = "ledger/account/{accountId}"
     const val Transaction = "ledger/transaction/{transactionId}"
     const val Categories = "ledger/categories"
+    const val SenderDiagnostic = "ledger/sender-diagnostic"
     const val Search = "search"
     const val Analytics = "analytics"
     const val AnalyticsTransaction = "analytics/transaction/{transactionId}"
@@ -77,20 +84,39 @@ fun ExpenseApp(
     val nav = rememberNavController()
     val refresh = remember { MutableStateFlow(0) }
     val epoch by refresh.collectAsState()
+    val scan by application.inboxScan.collectAsState()
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         scope.launch {
             if (granted[SmsPermissions.READ_SMS] == true) {
                 withContext(Dispatchers.IO) { application.scanInboxIfGranted() }
+            } else {
+                refresh.value = refresh.value + 1
             }
+        }
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch {
+                    withContext(Dispatchers.IO) { application.scanInboxIfGranted() }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(scan.phase, scan.generation) {
+        if (scan.phase == InboxScanPhase.RUNNING || scan.phase == InboxScanPhase.FINISHED) {
             refresh.value = refresh.value + 1
         }
     }
     fun openLedger() {
         if (nav.currentDestination?.route != Routes.Unlock) return
-        nav.navigate(Routes.Review) {
+        nav.navigate(Routes.Ledger) {
             popUpTo(Routes.Unlock) { inclusive = true }
         }
         val missing = application.missingSmsPermissions()
@@ -112,7 +138,7 @@ fun ExpenseApp(
                             selected = route == destination.route,
                             onClick = {
                                 nav.navigate(destination.route) {
-                                    popUpTo(Routes.Review) { saveState = true }
+                                    popUpTo(Routes.Ledger) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -128,7 +154,7 @@ fun ExpenseApp(
         NavHost(
             navController = nav,
             startDestination = Routes.Unlock,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.padding(padding).fillMaxSize(),
         ) {
             composable(Routes.Unlock) {
                 ColdStartUnlockScreen(
@@ -164,10 +190,17 @@ fun ExpenseApp(
                 LedgerRoute(
                     session = application.ledger(),
                     refreshEpoch = epoch,
-                    onOpenAccount = { nav.navigate(Routes.account(it)) },
+                    scan = scan.summary(),
+                    showSenderDiagnostic = DeveloperTools.SENDER_DIAGNOSTIC,
+                    onOpenSearch = { nav.navigate(Routes.Search) },
                     onOpenTransaction = { nav.navigate(Routes.transaction(it)) },
-                    onOpenCategories = { nav.navigate(Routes.Categories) },
+                    onOpenSenderDiagnostic = { nav.navigate(Routes.SenderDiagnostic) },
                 )
+            }
+            composable(Routes.SenderDiagnostic) {
+                NestedPage(title = "Sender diagnostic", onBack = { nav.popBackStack() }) {
+                    SenderDiagnosticRoute(session = application.ledger())
+                }
             }
             composable(
                 route = Routes.Account,
@@ -191,6 +224,7 @@ fun ExpenseApp(
                         session = application.ledger(),
                         transactionId = transactionId,
                         onOpenAnalytics = { nav.navigate(Routes.analytics(it)) },
+                        onOpenCategories = { nav.navigate(Routes.Categories) },
                     )
                 }
             }
@@ -200,7 +234,9 @@ fun ExpenseApp(
                 }
             }
             composable(Routes.Search) {
-                SearchRoute(session = application.ledger(), refreshEpoch = epoch)
+                NestedPage(title = "Search", onBack = { nav.popBackStack() }) {
+                    SearchRoute(session = application.ledger(), refreshEpoch = epoch)
+                }
             }
             composable(Routes.Analytics) {
                 AnalyticsRoute(
@@ -224,6 +260,16 @@ fun ExpenseApp(
             }
         }
     }
+}
+
+private fun InboxScan.summary(): LedgerScanSummary? {
+    if (phase == InboxScanPhase.IDLE) return null
+    return LedgerScanSummary(
+        title = InboxScanText.title(running = phase == InboxScanPhase.RUNNING),
+        metrics = InboxScanText.metrics(tally).map { LedgerScanMetric(it.label, it.value) },
+        detail = InboxScanText.detail(tally),
+        note = InboxScanText.unmatchedNote(tally),
+    )
 }
 
 @Composable
@@ -252,10 +298,14 @@ private data class Destination(
 )
 
 private val destinations = listOf(
-    Destination(Routes.Review, "Review", Icons.Filled.Info),
     Destination(Routes.Ledger, "Ledger", Icons.Filled.AccountBox),
-    Destination(Routes.Search, "Search", Icons.Filled.Search),
+    Destination(Routes.Review, "Review", Icons.Filled.Info),
     Destination(Routes.Analytics, "Analytics", Icons.Filled.DateRange),
 )
 
 private val TOP_LEVEL = destinations.map { it.route }.toSet()
+
+/** Sender diagnostic stays in the app for development and is not on the ledger. */
+internal object DeveloperTools {
+    const val SENDER_DIAGNOSTIC: Boolean = false
+}

@@ -1,20 +1,33 @@
 package expense.android.ui.ledger
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,70 +50,186 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+
+data class LedgerScanMetric(
+    val label: String,
+    val value: String,
+)
+
+data class LedgerScanSummary(
+    val title: String,
+    val metrics: List<LedgerScanMetric>,
+    val detail: String,
+    val note: String?,
+)
 
 @Composable
 fun LedgerRoute(
     session: LedgerSession,
     refreshEpoch: Int,
-    onOpenAccount: (String) -> Unit,
+    scan: LedgerScanSummary? = null,
+    showSenderDiagnostic: Boolean = false,
+    onOpenSearch: () -> Unit,
     onOpenTransaction: (String) -> Unit,
-    onOpenCategories: () -> Unit,
+    onOpenSenderDiagnostic: () -> Unit,
 ) {
-    var tree by remember { mutableStateOf<LedgerTree?>(null) }
+    var state by remember { mutableStateOf(session.peekScreen()) }
     var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(refreshEpoch) {
         try {
-            tree = withContext(Dispatchers.IO) { LedgerSessionBindings.tree(session) }
+            state = withContext(Dispatchers.IO) { session.screen() }
             message = null
         } catch (_: DatabaseLockedException) {
             message = "Unlock the ledger to continue."
         }
     }
-    val loaded = tree
+    val loaded = state
     if (loaded == null) {
         CircularProgressIndicator(Modifier.padding(24.dp))
         return
     }
-    LedgerScreen(loaded, message, onOpenAccount, onOpenTransaction, onOpenCategories)
+    LedgerScreen(
+        state = loaded,
+        message = message,
+        scan = scan,
+        showSenderDiagnostic = showSenderDiagnostic,
+        onOpenSearch = onOpenSearch,
+        onOpenTransaction = onOpenTransaction,
+        onOpenSenderDiagnostic = onOpenSenderDiagnostic,
+    )
 }
 
 @Composable
 fun LedgerScreen(
-    tree: LedgerTree,
+    state: LedgerState,
     message: String?,
-    onOpenAccount: (String) -> Unit,
+    scan: LedgerScanSummary?,
+    showSenderDiagnostic: Boolean,
+    onOpenSearch: () -> Unit,
     onOpenTransaction: (String) -> Unit,
-    onOpenCategories: () -> Unit,
+    onOpenSenderDiagnostic: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+    var month by remember { mutableStateOf<YearMonth?>(null) }
+    var accountId by remember { mutableStateOf<String?>(null) }
+    val view = remember(state, month, accountId) { LedgerCards.view(state, month, accountId) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Ledger", style = MaterialTheme.typography.headlineSmall)
-        TextButton(onClick = onOpenCategories) { Text("Categories") }
-        message?.let { Text(it) }
-        if (tree.banks.isEmpty()) Text("No banks or transactions yet.")
-        tree.banks.forEach { bank ->
-            Text(bank.institutionId, style = MaterialTheme.typography.titleMedium)
-            bank.accounts.forEach { group ->
-                TextButton(onClick = { onOpenAccount(group.account.id) }) {
-                    Text(group.account.ledgerLabel())
-                }
-                group.transactions.forEach { transaction ->
-                    TransactionRow(transaction) { onOpenTransaction(transaction.id) }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Ledger", style = MaterialTheme.typography.headlineSmall)
+                IconButton(onClick = onOpenSearch) {
+                    Icon(Icons.Filled.Search, contentDescription = "Search")
                 }
             }
-            if (bank.unassigned.isNotEmpty()) {
-                Text("No account")
-                bank.unassigned.forEach { transaction ->
-                    TransactionRow(transaction) { onOpenTransaction(transaction.id) }
+        }
+        if (scan != null) item { ScanSummaryCard(scan) }
+        if (showSenderDiagnostic) {
+            item { TextButton(onClick = onOpenSenderDiagnostic) { Text("Sender diagnostic") } }
+        }
+        item { Text(view.scopeLabel, style = MaterialTheme.typography.titleMedium) }
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(onClick = {
+                    month = null
+                    accountId = null
+                }) { Text("All") }
+                view.months.forEach { value ->
+                    TextButton(onClick = { month = if (month == value) null else value }) {
+                        Text(value.format(java.time.format.DateTimeFormatter.ofPattern("MMM yyyy")))
+                    }
+                }
+                view.accounts.forEach { account ->
+                    TextButton(onClick = { accountId = if (accountId == account.id) null else account.id }) {
+                        Text(account.ledgerLabel())
+                    }
                 }
             }
+        }
+        item { message?.let { Text(it) } }
+        if (view.cards.isEmpty()) {
+            item { Text("No transactions in this view.") }
+        }
+        items(items = view.cards, key = { it.id }) { card ->
+            TransactionCardView(card) { onOpenTransaction(card.id) }
+        }
+    }
+}
+
+@Composable
+private fun TransactionCardView(card: TransactionCard, onOpen: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(card.title, style = MaterialTheme.typography.titleMedium)
+            Text(card.amountLine)
+            Text(card.channelLine, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(card.whenLine, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            card.category?.let { Text(it) }
+        }
+    }
+}
+
+@Composable
+private fun ScanSummaryCard(scan: LedgerScanSummary) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            scan.title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            scan.metrics.forEach { metric ->
+                MetricTile(metric, Modifier.weight(1f))
+            }
+        }
+        if (expanded) {
+            Text(scan.detail, style = MaterialTheme.typography.bodySmall)
+            scan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+@Composable
+private fun MetricTile(metric: LedgerScanMetric, modifier: Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(
+                metric.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+            Text(metric.value, style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -111,7 +240,7 @@ fun AccountRoute(
     accountId: String,
     onOpenTransaction: (String) -> Unit,
 ) {
-    var state by remember { mutableStateOf<LedgerState?>(null) }
+    var state by remember { mutableStateOf(session.peekScreen()) }
     var name by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -170,8 +299,9 @@ fun TransactionRoute(
     session: LedgerSession,
     transactionId: String,
     onOpenAnalytics: (String) -> Unit,
+    onOpenCategories: () -> Unit = {},
 ) {
-    var state by remember { mutableStateOf<LedgerState?>(null) }
+    var state by remember { mutableStateOf(session.peekScreen()) }
     var merchantName by remember { mutableStateOf("") }
     var categoryId by remember { mutableStateOf<String?>(null) }
     var applyForward by remember { mutableStateOf(true) }
@@ -200,7 +330,7 @@ fun TransactionRoute(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(transactionTitle(loaded, transaction), style = MaterialTheme.typography.headlineSmall)
-        Text("${transaction.direction.name.lowercase()} · ${transaction.kind.name.lowercase().replace('_', ' ')}")
+        Text("${transaction.direction.name.lowercase()} · ${transaction.eventType.name.lowercase().replace('_', ' ')}")
         Text(transaction.occurredCivil.format(WHEN))
         message?.let { Text(it) }
         OutlinedTextField(
@@ -249,6 +379,7 @@ fun TransactionRoute(
             applyCorrection(scope, session, draft, { state = it }, { message = it })
         }) { Text("Save merchant") }
         TextButton(onClick = { onOpenAnalytics(transaction.id) }) { Text("Spending for this transaction") }
+        TextButton(onClick = onOpenCategories) { Text("Categories") }
     }
 }
 
@@ -381,7 +512,7 @@ private fun CategoryEditor(
 private fun TransactionRow(transaction: Transaction, onOpen: () -> Unit) {
     TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
-            Text(transaction.merchantRaw ?: transaction.kind.name.lowercase())
+            Text(transaction.merchantRaw ?: transaction.eventType.name.lowercase())
             Text("${MoneyFormat.format(transaction.amount)} · ${transaction.direction.name.lowercase()}")
         }
     }

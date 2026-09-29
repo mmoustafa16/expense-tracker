@@ -4,7 +4,8 @@ import expense.money.Money
 import java.time.LocalDateTime
 
 data class TransactionCandidate(
-    val kind: TransactionKind,
+    val eventType: FinancialEventType,
+    val spendEffect: SpendEffect,
     val amount: Money?,
     val direction: Direction,
     val merchantRaw: String?,
@@ -16,6 +17,12 @@ data class TransactionCandidate(
     val foreignAmount: Money? = null,
     val installmentIndex: Int? = null,
     val installmentCount: Int? = null,
+    /**
+     * Every other money value the message stated, with its role. The event
+     * value itself is [amount]; these are the balances, limits, fees, and
+     * advertised figures that sit beside it.
+     */
+    val relatedAmounts: List<RoledAmount> = emptyList(),
 )
 
 data class Extraction(

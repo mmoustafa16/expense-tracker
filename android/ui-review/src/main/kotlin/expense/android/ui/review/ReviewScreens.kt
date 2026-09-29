@@ -3,9 +3,12 @@ package expense.android.ui.review
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import expense.android.storage.DatabaseLockedException
 import expense.android.storage.LedgerSession
@@ -35,7 +39,7 @@ import expense.categories.Category
 import expense.ingest.CairoClock
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,27 +52,29 @@ fun ReviewRoute(
     refreshEpoch: Int,
     onEnterManual: (String) -> Unit,
 ) {
-    var rows by remember { mutableStateOf<List<ReviewRow>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    var page by remember { mutableStateOf(ReviewSession.peek(session, 0) ?: ReviewPage(emptyList(), 0, 0)) }
+    var offset by remember { mutableStateOf(0) }
+    var loading by remember { mutableStateOf(page.rows.isEmpty()) }
     var message by remember { mutableStateOf<String?>(null) }
     var pendingDismiss by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(refreshEpoch) {
-        loading = true
+    LaunchedEffect(refreshEpoch, offset) {
+        if (page.rows.isEmpty()) loading = true
         try {
-            rows = withContext(Dispatchers.IO) { ReviewSession.rows(session) }
+            page = withContext(Dispatchers.IO) { ReviewSession.page(session, offset) }
+            offset = page.offset
             message = null
         } catch (_: DatabaseLockedException) {
             message = "Unlock the ledger to continue."
         }
         loading = false
     }
-    if (loading && rows.isEmpty()) {
+    if (loading && page.rows.isEmpty()) {
         CircularProgressIndicator(Modifier.padding(24.dp))
         return
     }
     ReviewScreen(
-        rows = rows,
+        page = page,
         message = message,
         pendingDismiss = pendingDismiss,
         onAskDismiss = { pendingDismiss = it },
@@ -76,7 +82,8 @@ fun ReviewRoute(
         onConfirmDismiss = { attemptId ->
             scope.launch {
                 try {
-                    rows = withContext(Dispatchers.IO) { ReviewSession.dismiss(session, attemptId) }
+                    page = withContext(Dispatchers.IO) { ReviewSession.dismissPage(session, attemptId, offset) }
+                    offset = page.offset
                     message = null
                 } catch (_: DatabaseLockedException) {
                     message = "Unlock the ledger to continue."
@@ -84,35 +91,56 @@ fun ReviewRoute(
                 pendingDismiss = null
             }
         },
+        onPrevious = { offset = (page.offset - ReviewQueue.PAGE_SIZE).coerceAtLeast(0) },
+        onNext = { offset = page.offset + page.rows.size },
         onEnterManual = onEnterManual,
     )
 }
 
 @Composable
 fun ReviewScreen(
-    rows: List<ReviewRow>,
+    page: ReviewPage,
     message: String?,
     pendingDismiss: String?,
     onAskDismiss: (String) -> Unit,
     onCancelDismiss: () -> Unit,
     onConfirmDismiss: (String) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onEnterManual: (String) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(PaddingValues(16.dp)),
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Review", style = MaterialTheme.typography.headlineSmall)
-        Text("Uncertain or unmatched financial messages stay here. Dismiss one, or record it yourself.")
-        if (message != null) Text(message)
-        if (rows.isEmpty()) Text("No messages are waiting for review.")
-        rows.forEach { row ->
+        item {
+            Text("Review", style = MaterialTheme.typography.headlineSmall)
+            Text("Messages that look like transactions, and could not be posted, stay here.")
+            if (message != null) Text(message)
+            if (page.rows.isEmpty()) Text("No messages are waiting for review.")
+            if (page.total > ReviewQueue.PAGE_SIZE) {
+                val end = page.offset + page.rows.size
+                Text("Showing ${page.offset + 1}–$end of ${page.total}")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onPrevious, enabled = page.offset > 0) { Text("Previous") }
+                    TextButton(onClick = onNext, enabled = end < page.total) { Text("Next") }
+                }
+            }
+        }
+        items(items = page.rows, key = { it.attemptId }) { row ->
             ListItem(
                 headlineContent = { Text("${ReviewQueue.statusLabel(row.status)} · ${row.sender}") },
-                supportingContent = { Text(row.body.orEmpty()) },
+                supportingContent = {
+                    Column {
+                        row.reason?.let { Text(ReviewQueue.holdLabel(it), style = MaterialTheme.typography.labelMedium) }
+                        Text(
+                            row.body.orEmpty(),
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                },
             )
             if (pendingDismiss == row.attemptId) {
                 Text("Dismiss this message? The original text stays in the ledger.")
@@ -223,11 +251,11 @@ fun ManualTransactionScreen(
             onSelected = { onEntry(entry.copy(direction = it)) },
         )
         DropdownField(
-            label = "Kind",
-            options = TransactionKind.entries,
-            selected = entry.kind,
+            label = "Event",
+            options = FinancialEventType.entries.filter { it.canMoveMoney() },
+            selected = entry.eventType,
             optionLabel = { it.name.lowercase().replace('_', ' ') },
-            onSelected = { onEntry(entry.copy(kind = it)) },
+            onSelected = { onEntry(entry.copy(eventType = it)) },
         )
         OutlinedTextField(
             value = whenText,
@@ -305,6 +333,8 @@ private fun AccountKind.readable(): String {
         AccountKind.WALLET -> "Wallet"
         AccountKind.PREPAID -> "Prepaid"
         AccountKind.MEEZA -> "Meeza"
+        AccountKind.CARD -> "Card"
+        AccountKind.UNSPECIFIED -> "Unspecified"
     }
 }
 

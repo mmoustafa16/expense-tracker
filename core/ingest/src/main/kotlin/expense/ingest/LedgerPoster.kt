@@ -6,7 +6,7 @@ import expense.ledger.Account
 import expense.ledger.DedupKey
 import expense.ledger.DuplicateMatcher
 import expense.ledger.EvidenceRole
-import expense.ledger.KindCategories
+import expense.ledger.EventCategories
 import expense.ledger.LedgerState
 import expense.ledger.OccurredSource
 import expense.ledger.PossibleDuplicate
@@ -22,7 +22,8 @@ import expense.money.Money
 import expense.parse.BankProfile
 import expense.parse.Extraction
 import expense.parse.TransactionCandidate
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
+import expense.parse.SpendEffect
 import java.time.format.DateTimeFormatter
 
 internal class LedgerPoster(
@@ -38,7 +39,7 @@ internal class LedgerPoster(
         var anchorId: String? = null
         for (candidate in extraction.candidates) {
             val amount = candidate.amount ?: continue
-            if (candidate.kind == TransactionKind.REVERSAL) {
+            if (candidate.eventType == FinancialEventType.REVERSAL) {
                 current = postReversal(current, message, profile, candidate, amount)
                 continue
             }
@@ -46,7 +47,7 @@ internal class LedgerPoster(
                 current.transactions,
                 profile.id,
                 candidate.reference,
-                candidate.kind,
+                candidate.eventType,
             )
             if (resend != null) {
                 current = addEvidence(current, resend.id, message.id, EvidenceRole.DUPLICATE)
@@ -54,7 +55,7 @@ internal class LedgerPoster(
             }
             val posted = appendTransaction(current, message, profile, candidate, amount, anchorId)
             current = posted.state
-            if (candidate.kind == TransactionKind.PURCHASE || candidate.kind == TransactionKind.INSTALLMENT) {
+            if (candidate.eventType.canMoveMoney() && candidate.spendEffect == SpendEffect.SPEND) {
                 anchorId = posted.transactionId
             }
         }
@@ -80,7 +81,7 @@ internal class LedgerPoster(
             state.transactions,
             profile.id,
             candidate.reference,
-            TransactionKind.REVERSAL,
+            FinancialEventType.REVERSAL,
         )
         if (resend != null) {
             return addEvidence(state, resend.id, message.id, EvidenceRole.DUPLICATE)
@@ -131,7 +132,7 @@ internal class LedgerPoster(
         )
         val merchant = resolved.merchant
         val normalized = candidate.merchantRaw?.let(MerchantKey::normalize)
-        val (categoryId, categorySource) = categorize(candidate.kind, merchant?.id, normalized, state)
+        val (categoryId, categorySource) = categorize(candidate.eventType, merchant?.id, normalized, state)
         val mask = candidate.accountMask?.takeIf { it.isNotBlank() }
         val (withAccount, accountId) = ensureAccount(
             state.copy(merchants = resolved.merchants),
@@ -140,14 +141,14 @@ internal class LedgerPoster(
             amount,
             mask,
         )
-        val linked = when (candidate.kind) {
-            TransactionKind.FEE -> anchorId
-            TransactionKind.REFUND -> TransactionLinker.findOriginal(
+        val linked = when (candidate.eventType) {
+            FinancialEventType.FEE -> anchorId
+            FinancialEventType.REFUND -> TransactionLinker.findOriginal(
                 withAccount.transactions,
                 profile.id,
                 candidate.reference,
             )?.id
-            TransactionKind.REVERSAL -> anchorId
+            FinancialEventType.REVERSAL -> anchorId
             else -> null
         }
         val status = TransactionStatus.POSTED
@@ -158,14 +159,15 @@ internal class LedgerPoster(
                 mask = mask,
                 reference = candidate.reference,
                 amount = amount,
-                kind = candidate.kind,
+                eventType = candidate.eventType,
                 merchantKey = normalized,
                 minuteBucket = civil.format(MINUTE),
             ),
             smsId = message.id,
             institutionId = profile.id,
             accountId = accountId,
-            kind = candidate.kind,
+            eventType = candidate.eventType,
+            spendEffect = candidate.spendEffect,
             status = status,
             amount = amount,
             direction = candidate.direction,
@@ -181,7 +183,7 @@ internal class LedgerPoster(
             foreignAmount = candidate.foreignAmount,
             duplicateOfId = null,
             linkedTransactionId = linked,
-            includeInSpend = SpendPolicy.include(candidate.kind, status),
+            includeInSpend = SpendPolicy.include(candidate.spendEffect, status),
             pipelineVersion = PipelineMetadata.VERSION,
             profileVersion = profile.version,
             installmentIndex = candidate.installmentIndex,
@@ -197,7 +199,7 @@ internal class LedgerPoster(
             institutionId = profile.id,
             mask = mask,
             amount = amount,
-            kind = candidate.kind,
+            eventType = candidate.eventType,
             occurredAt = tx.occurredAt,
             reference = candidate.reference,
         )
@@ -214,14 +216,14 @@ internal class LedgerPoster(
     }
 
     private fun categorize(
-        kind: TransactionKind,
+        eventType: FinancialEventType,
         merchantId: String?,
         normalizedKey: String?,
         state: LedgerState,
     ): Pair<String?, CategorySource> {
         val customCategoryIds = state.categories.flatMap { listOf(it.id, it.slug) }.toSet()
         val ruled = CategoryResolver.resolve(merchantId, normalizedKey, state.categoryRules, customCategoryIds)
-        val kindDefault = KindCategories.defaultSlug(kind)
+        val kindDefault = EventCategories.defaultSlug(eventType)
         return when {
             ruled != null && ruled.merchantSpecific -> ruled.categoryId to ruled.source
             kindDefault != null -> kindDefault to CategorySource.RULE

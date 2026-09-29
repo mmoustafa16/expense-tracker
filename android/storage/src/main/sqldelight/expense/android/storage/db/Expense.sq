@@ -15,6 +15,7 @@ CREATE TABLE parse_attempt (
   profile_version TEXT,
   template_id TEXT,
   status TEXT NOT NULL,
+  event_type TEXT NOT NULL,
   confidence INTEGER,
   error TEXT
 );
@@ -22,7 +23,8 @@ CREATE TABLE parse_attempt (
 CREATE TABLE extraction_candidate (
   attempt_id TEXT NOT NULL,
   position INTEGER NOT NULL,
-  kind TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  spend_effect TEXT NOT NULL,
   direction TEXT NOT NULL,
   amount_minor INTEGER,
   amount_currency TEXT,
@@ -99,7 +101,8 @@ CREATE TABLE ledger_transaction (
   sms_id TEXT NOT NULL,
   institution_id TEXT NOT NULL,
   account_id TEXT,
-  kind TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  spend_effect TEXT NOT NULL,
   status TEXT NOT NULL,
   amount_minor INTEGER NOT NULL,
   amount_currency TEXT NOT NULL,
@@ -124,7 +127,11 @@ CREATE TABLE ledger_transaction (
   profile_version TEXT NOT NULL,
   installment_index INTEGER,
   installment_count INTEGER,
-  manual INTEGER NOT NULL
+  manual INTEGER NOT NULL,
+  -- Reading that produced this row. A revision pass visits rows whose stamp is
+  -- not the current one and stamps them inside the same transaction, so a
+  -- process death repeats only the page that did not commit.
+  revision TEXT NOT NULL
 );
 
 CREATE TABLE transaction_evidence (
@@ -145,6 +152,20 @@ CREATE TABLE review_dismissal (
   body_hash TEXT NOT NULL,
   received_at INTEGER NOT NULL,
   provider_message_id TEXT
+);
+
+-- What this device has observed from one sender, in aggregate.
+-- Counts and mask shapes only: no message text, amount, or merchant. An address
+-- earns the right to post from this history and from nothing else.
+CREATE TABLE sender_evidence (
+  sender TEXT NOT NULL PRIMARY KEY,
+  institution_id TEXT NOT NULL,
+  financial_events INTEGER NOT NULL,
+  movement_events INTEGER NOT NULL,
+  non_financial_events INTEGER NOT NULL,
+  event_types TEXT NOT NULL,
+  instrument_masks TEXT NOT NULL,
+  instrument_kinds TEXT NOT NULL
 );
 
 deleteMessages:
@@ -191,16 +212,16 @@ INSERT INTO stored_sms(id, sender, body, body_hash, provider_message_id, receive
 VALUES (:id, :sender, :body, :bodyHash, :providerMessageId, :receivedAt);
 
 insertAttempt:
-INSERT INTO parse_attempt(id, sms_id, pipeline_version, profile_id, profile_version, template_id, status, confidence, error)
-VALUES (:id, :smsId, :pipelineVersion, :profileId, :profileVersion, :templateId, :status, :confidence, :error);
+INSERT INTO parse_attempt(id, sms_id, pipeline_version, profile_id, profile_version, template_id, status, event_type, confidence, error)
+VALUES (:id, :smsId, :pipelineVersion, :profileId, :profileVersion, :templateId, :status, :eventType, :confidence, :error);
 
 insertCandidate:
 INSERT INTO extraction_candidate(
-  attempt_id, position, kind, direction, amount_minor, amount_currency, merchant_raw, occurred_at,
+  attempt_id, position, event_type, spend_effect, direction, amount_minor, amount_currency, merchant_raw, occurred_at,
   reference, account_mask, account_kind, balance_minor, balance_currency, foreign_minor, foreign_currency,
   installment_index, installment_count
 ) VALUES (
-  :attemptId, :position, :kind, :direction, :amountMinor, :amountCurrency, :merchantRaw, :occurredAt,
+  :attemptId, :position, :eventType, :spendEffect, :direction, :amountMinor, :amountCurrency, :merchantRaw, :occurredAt,
   :reference, :accountMask, :accountKind, :balanceMinor, :balanceCurrency, :foreignMinor, :foreignCurrency,
   :installmentIndex, :installmentCount
 );
@@ -231,15 +252,15 @@ VALUES (:id, :dedupKey, :field, :previousValue, :updatedValue, :applyForward, :c
 
 insertTransaction:
 INSERT INTO ledger_transaction(
-  id, dedup_key, sms_id, institution_id, account_id, kind, status, amount_minor, amount_currency, amount_text,
+  id, dedup_key, sms_id, institution_id, account_id, event_type, spend_effect, status, amount_minor, amount_currency, amount_text,
   direction, occurred_at, occurred_civil, occurred_source, merchant_raw, merchant_id, category_id, category_source,
   reference, balance_minor, balance_currency, foreign_minor, foreign_currency, duplicate_of_id, linked_transaction_id,
-  include_in_spend, pipeline_version, profile_version, installment_index, installment_count, manual
+  include_in_spend, pipeline_version, profile_version, installment_index, installment_count, manual, revision
 ) VALUES (
-  :id, :dedupKey, :smsId, :institutionId, :accountId, :kind, :status, :amountMinor, :amountCurrency, :amountText,
+  :id, :dedupKey, :smsId, :institutionId, :accountId, :eventType, :spendEffect, :status, :amountMinor, :amountCurrency, :amountText,
   :direction, :occurredAt, :occurredCivil, :occurredSource, :merchantRaw, :merchantId, :categoryId, :categorySource,
   :reference, :balanceMinor, :balanceCurrency, :foreignMinor, :foreignCurrency, :duplicateOfId, :linkedTransactionId,
-  :includeInSpend, :pipelineVersion, :profileVersion, :installmentIndex, :installmentCount, :manual
+  :includeInSpend, :pipelineVersion, :profileVersion, :installmentIndex, :installmentCount, :manual, :revision
 );
 
 insertEvidence:
@@ -261,12 +282,13 @@ ORDER BY rowid;
 
 selectAttempts:
 SELECT id, sms_id AS smsId, pipeline_version AS pipelineVersion, profile_id AS profileId,
-  profile_version AS profileVersion, template_id AS templateId, status, confidence, error
+  profile_version AS profileVersion, template_id AS templateId, status, event_type AS eventType, confidence, error
 FROM parse_attempt
 ORDER BY rowid;
 
 selectCandidates:
-SELECT attempt_id AS attemptId, position, kind, direction, amount_minor AS amountMinor,
+SELECT attempt_id AS attemptId, position, event_type AS eventType, spend_effect AS spendEffect,
+  direction, amount_minor AS amountMinor,
   amount_currency AS amountCurrency, merchant_raw AS merchantRaw, occurred_at AS occurredAt,
   reference, account_mask AS accountMask, account_kind AS accountKind, balance_minor AS balanceMinor,
   balance_currency AS balanceCurrency, foreign_minor AS foreignMinor, foreign_currency AS foreignCurrency,
@@ -307,7 +329,7 @@ ORDER BY created_at, id;
 
 selectTransactions:
 SELECT id, dedup_key AS dedupKey, sms_id AS smsId, institution_id AS institutionId, account_id AS accountId,
-  kind, status, amount_minor AS amountMinor, amount_currency AS amountCurrency, amount_text AS amountText,
+  event_type AS eventType, spend_effect AS spendEffect, status, amount_minor AS amountMinor, amount_currency AS amountCurrency, amount_text AS amountText,
   direction, occurred_at AS occurredAt, occurred_civil AS occurredCivil, occurred_source AS occurredSource,
   merchant_raw AS merchantRaw, merchant_id AS merchantId, category_id AS categoryId,
   category_source AS categorySource, reference, balance_minor AS balanceMinor, balance_currency AS balanceCurrency,
@@ -334,13 +356,13 @@ FROM review_dismissal
 ORDER BY rowid;
 
 matchTransactionBody:
-SELECT t.id AS transactionId, t.sms_id AS smsId
+SELECT t.id AS transactionId, t.sms_id AS smsId, t.occurred_at AS sortAt
 FROM ledger_transaction t
 INNER JOIN stored_sms s ON s.id = t.sms_id
 WHERE s.body IS NOT NULL AND instr(lower(s.body), lower(:needle)) > 0;
 
 matchMerchant:
-SELECT t.id AS transactionId, t.sms_id AS smsId
+SELECT t.id AS transactionId, t.sms_id AS smsId, t.occurred_at AS sortAt
 FROM ledger_transaction t
 LEFT JOIN merchant m ON m.id = t.merchant_id
 WHERE instr(lower(ifnull(t.merchant_raw, '')), lower(:needle)) > 0
@@ -348,22 +370,258 @@ WHERE instr(lower(ifnull(t.merchant_raw, '')), lower(:needle)) > 0
    OR instr(lower(ifnull(m.normalized_key, '')), lower(:needle)) > 0;
 
 matchReference:
-SELECT id AS transactionId, sms_id AS smsId
+SELECT id AS transactionId, sms_id AS smsId, occurred_at AS sortAt
 FROM ledger_transaction
 WHERE reference IS NOT NULL AND instr(lower(reference), lower(:needle)) > 0;
 
 matchAmount:
-SELECT id AS transactionId, sms_id AS smsId
+SELECT id AS transactionId, sms_id AS smsId, occurred_at AS sortAt
 FROM ledger_transaction
 WHERE instr(lower(amount_text), lower(:needle)) > 0
    OR instr(CAST(amount_minor AS TEXT), :needle) > 0;
 
 matchCategory:
-SELECT id AS transactionId, sms_id AS smsId
+SELECT id AS transactionId, sms_id AS smsId, occurred_at AS sortAt
 FROM ledger_transaction
 WHERE category_id IN :categoryIds;
 
 matchSmsBody:
-SELECT id AS smsId
+SELECT id AS smsId, received_at AS sortAt
 FROM stored_sms
 WHERE body IS NOT NULL AND instr(lower(body), lower(:needle)) > 0;
+
+selectWorkingMessages:
+SELECT id, sender, body_hash AS bodyHash, provider_message_id AS providerMessageId,
+  received_at AS receivedAt, iif(body IS NULL, 0, 1) AS retained
+FROM stored_sms
+ORDER BY rowid;
+
+selectMessagesByIds:
+SELECT id, sender, body, body_hash AS bodyHash, provider_message_id AS providerMessageId, received_at AS receivedAt
+FROM stored_sms
+WHERE id IN :ids;
+
+selectTransactionsByIds:
+SELECT id, dedup_key AS dedupKey, sms_id AS smsId, institution_id AS institutionId, account_id AS accountId,
+  event_type AS eventType, spend_effect AS spendEffect, status, amount_minor AS amountMinor, amount_currency AS amountCurrency, amount_text AS amountText,
+  direction, occurred_at AS occurredAt, occurred_civil AS occurredCivil, occurred_source AS occurredSource,
+  merchant_raw AS merchantRaw, merchant_id AS merchantId, category_id AS categoryId,
+  category_source AS categorySource, reference, balance_minor AS balanceMinor, balance_currency AS balanceCurrency,
+  foreign_minor AS foreignMinor, foreign_currency AS foreignCurrency, duplicate_of_id AS duplicateOfId,
+  linked_transaction_id AS linkedTransactionId, include_in_spend AS includeInSpend,
+  pipeline_version AS pipelineVersion, profile_version AS profileVersion,
+  installment_index AS installmentIndex, installment_count AS installmentCount, manual
+FROM ledger_transaction
+WHERE id IN :ids;
+
+deleteTransactionById:
+DELETE FROM ledger_transaction WHERE id = :id;
+
+countMessages:
+SELECT count(*) AS total FROM stored_sms;
+
+-- Bodies this device still holds. This is a retention figure and is not a
+-- count of financial events or of ledger rows.
+countRetainedMessages:
+SELECT count(*) AS total FROM stored_sms WHERE body IS NOT NULL;
+
+countFinancialEvents:
+SELECT count(*) AS total FROM parse_attempt WHERE event_type != 'NOT_FINANCIAL';
+
+countSpendTransactions:
+SELECT count(*) AS total FROM ledger_transaction WHERE include_in_spend = 1;
+
+-- Financial events that became neither a ledger row nor a review item.
+countExcludedFinancialEvents:
+SELECT count(*) AS total
+FROM parse_attempt
+WHERE event_type != 'NOT_FINANCIAL' AND status = 'IGNORED_NOT_BANK';
+
+countAttemptsByStatus:
+SELECT status, count(*) AS total
+FROM parse_attempt
+GROUP BY status;
+
+countMatchedAttempts:
+SELECT count(*) AS total
+FROM parse_attempt
+WHERE profile_id IS NOT NULL OR status = 'AMBIGUOUS';
+
+countPostedTransactions:
+SELECT count(*) AS total FROM ledger_transaction WHERE manual = 0;
+
+countOpenReview:
+SELECT count(*) AS total
+FROM parse_attempt a
+INNER JOIN stored_sms s ON s.id = a.sms_id
+WHERE a.status IN ('UNSUPPORTED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+AND NOT EXISTS (
+  SELECT 1 FROM review_dismissal d
+  WHERE (
+    d.provider_message_id IS NOT NULL
+    AND d.provider_message_id != ''
+    AND d.provider_message_id = s.provider_message_id
+  ) OR (
+    d.sender = s.sender
+    AND d.body_hash = s.body_hash
+    AND d.received_at = s.received_at
+  )
+);
+
+selectOpenReviewPage:
+SELECT a.id AS attemptId, a.sms_id AS smsId, a.status AS status, a.pipeline_version AS pipelineVersion,
+  a.error AS holdReason,
+  s.sender AS sender, s.body AS body, s.received_at AS receivedAt
+FROM parse_attempt a
+INNER JOIN stored_sms s ON s.id = a.sms_id
+WHERE a.status IN ('UNSUPPORTED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+AND NOT EXISTS (
+  SELECT 1 FROM review_dismissal d
+  WHERE (
+    d.provider_message_id IS NOT NULL
+    AND d.provider_message_id != ''
+    AND d.provider_message_id = s.provider_message_id
+  ) OR (
+    d.sender = s.sender
+    AND d.body_hash = s.body_hash
+    AND d.received_at = s.received_at
+  )
+)
+ORDER BY s.received_at ASC, a.id ASC
+LIMIT :limit OFFSET :offset;
+
+clearSmsBody:
+UPDATE stored_sms SET body = NULL WHERE id = :id;
+
+selectStaleReview:
+SELECT a.id AS attemptId, s.id AS smsId, s.sender AS sender, s.body AS body,
+  s.received_at AS receivedAt, s.body_hash AS bodyHash,
+  s.provider_message_id AS providerMessageId
+FROM parse_attempt a
+INNER JOIN stored_sms s ON s.id = a.sms_id
+WHERE s.body IS NOT NULL
+  AND a.pipeline_version != :pipelineVersion
+  AND a.status IN ('UNSUPPORTED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+ORDER BY s.received_at, a.id
+LIMIT :limit;
+
+selectStaleOrphans:
+SELECT s.id AS smsId, s.sender AS sender, s.body AS body, s.received_at AS receivedAt,
+  s.body_hash AS bodyHash, s.provider_message_id AS providerMessageId,
+  MIN(a.id) AS attemptId
+FROM stored_sms s
+LEFT JOIN parse_attempt a ON a.sms_id = s.id
+WHERE s.body IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM parse_attempt open_attempt
+    WHERE open_attempt.sms_id = s.id
+      AND open_attempt.status IN ('UNSUPPORTED', 'PARSED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+  )
+GROUP BY s.id, s.sender, s.body, s.received_at, s.body_hash, s.provider_message_id
+ORDER BY s.received_at, s.id
+LIMIT :limit;
+
+updateAttempt:
+UPDATE parse_attempt
+SET pipeline_version = :pipelineVersion,
+    profile_id = :profileId,
+    profile_version = :profileVersion,
+    template_id = :templateId,
+    status = :status,
+    event_type = :eventType,
+    confidence = :confidence,
+    error = :error
+WHERE id = :id;
+
+deleteCandidatesForAttempt:
+DELETE FROM extraction_candidate WHERE attempt_id = :attemptId;
+
+-- Highest provider row id this device has stored.
+--
+-- The provider assigns ids in arrival order, so this is a monotonic watermark
+-- even when the network stamps two messages with the same date or with a date
+-- that is wrong. A timestamp high-water mark silently skips any message whose
+-- date sorts below a row already stored.
+selectInboxWatermark:
+SELECT max(CAST(provider_message_id AS INTEGER)) AS providerMessageId
+FROM stored_sms
+WHERE provider_message_id GLOB '[0-9]*'
+  AND provider_message_id NOT GLOB '*[^0-9]*';
+
+updateSmsProviderId:
+UPDATE stored_sms SET provider_message_id = :providerMessageId WHERE id = :id;
+
+selectSenderEvidence:
+SELECT sender, institution_id AS institutionId, financial_events AS financialEvents,
+  movement_events AS movementEvents, non_financial_events AS nonFinancialEvents,
+  event_types AS eventTypes, instrument_masks AS instrumentMasks, instrument_kinds AS instrumentKinds
+FROM sender_evidence
+ORDER BY sender;
+
+insertSenderEvidence:
+INSERT OR REPLACE INTO sender_evidence(
+  sender, institution_id, financial_events, movement_events, non_financial_events,
+  event_types, instrument_masks, instrument_kinds
+) VALUES (
+  :sender, :institutionId, :financialEvents, :movementEvents, :nonFinancialEvents,
+  :eventTypes, :instrumentMasks, :instrumentKinds
+);
+
+-- Posted rows whose SMS this device still holds, oldest first.
+--
+-- A revision pass re-reads these so an already-posted transaction gains what a
+-- newer pipeline can now see. Reclassifying only review rows leaves every row
+-- that posted under an older reading frozen with that reading forever.
+selectRevisableTransactions:
+SELECT t.id AS transactionId, t.institution_id AS institutionId, t.account_id AS accountId,
+  t.event_type AS eventType, t.spend_effect AS spendEffect, t.status AS status,
+  t.amount_currency AS currency, t.dedup_key AS dedupKey,
+  t.occurred_civil AS occurredCivil, t.occurred_source AS occurredSource,
+  t.include_in_spend AS includeInSpend, t.balance_minor AS balanceMinor,
+  t.balance_currency AS balanceCurrency,
+  s.body AS body, s.sender AS sender, s.received_at AS receivedAt
+FROM ledger_transaction t
+INNER JOIN stored_sms s ON s.id = t.sms_id
+WHERE t.manual = 0
+  AND s.body IS NOT NULL
+  AND t.revision != :revision
+ORDER BY t.rowid
+LIMIT :limit;
+
+-- Writes a newer reading onto the row that is already there. The id and the
+-- dedup key are untouched, so user corrections keyed on them still apply and no
+-- second row is created for the same message.
+updateTransactionRevision:
+UPDATE ledger_transaction
+SET account_id = :accountId,
+    event_type = :eventType,
+    spend_effect = :spendEffect,
+    include_in_spend = :includeInSpend,
+    occurred_at = :occurredAt,
+    occurred_civil = :occurredCivil,
+    occurred_source = :occurredSource,
+    balance_minor = :balanceMinor,
+    balance_currency = :balanceCurrency,
+    pipeline_version = :pipelineVersion,
+    revision = :revision
+WHERE id = :id;
+
+markTransactionRevision:
+UPDATE ledger_transaction SET revision = :revision WHERE id = :id;
+
+countCorrectionsFor:
+SELECT count(*) AS total FROM correction WHERE dedup_key = :dedupKey AND field = :field;
+
+countStaleRevisions:
+SELECT count(*) AS total
+FROM ledger_transaction t
+INNER JOIN stored_sms s ON s.id = t.sms_id
+WHERE t.manual = 0 AND s.body IS NOT NULL AND t.revision != :revision;
+
+selectAccountId:
+SELECT id FROM account
+WHERE institution_id = :institutionId AND kind = :kind AND mask = :mask
+LIMIT 1;
+
+updateTransactionAccount:
+UPDATE ledger_transaction SET account_id = :accountId WHERE id = :id;

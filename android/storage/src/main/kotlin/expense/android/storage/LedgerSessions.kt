@@ -1,6 +1,8 @@
 package expense.android.storage
 
 import android.content.Context
+import expense.ingest.IngestPipeline
+import expense.parse.VerifiedBankCatalog
 import java.io.File
 
 object LedgerSessions {
@@ -18,6 +20,7 @@ object LedgerSessions {
                 box = AndroidSecretKeyBox(),
             ),
             openDriver = { _, passphrase -> SqlCipherDrivers.open(appContext, passphrase) },
+            pipeline = IngestPipeline(registry = VerifiedBankCatalog.registry()),
         )
     }
 }

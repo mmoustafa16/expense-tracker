@@ -1,0 +1,4 @@
+{
+  "note": "Optional public sender aliases. An entry is an exact SMS address, a stable id, and a display name. It is data, not a parser. An empty list is valid: unambiguous alphanumeric senders and short codes are discovered on the device.",
+  "institutions": []
+}

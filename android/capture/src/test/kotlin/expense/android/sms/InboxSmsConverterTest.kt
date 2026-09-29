@@ -26,6 +26,13 @@ class InboxSmsConverterTest {
     }
 
     @Test
+    fun `the inbox cursor asks only for rows after the stored provider row id`() {
+        val cursor = InboxCursor(providerMessageId = 88)
+        assertEquals("_id > ?", cursor.selection())
+        assertEquals(listOf("88"), cursor.args().toList())
+    }
+
+    @Test
     fun `missing sender and body become empty strings and the provider id is kept`() {
         val message = InboxSmsConverter.convert(
             InboxSmsRow(
@@ -57,7 +64,7 @@ class InboxSmsConverterTest {
     @Test
     fun `inbox query reads only the columns needed for an inbound sms`() {
         assertEquals(listOf("_id", "address", "body", "date"), InboxQuery.projection.toList())
-        assertEquals("date ASC, _id ASC", InboxQuery.sortOrder)
+        assertEquals("_id ASC", InboxQuery.sortOrder)
     }
 
     private fun row(id: String, sender: String, body: String, at: Instant): InboxSmsRow {

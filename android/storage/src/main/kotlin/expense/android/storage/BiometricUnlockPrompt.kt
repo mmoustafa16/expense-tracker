@@ -4,23 +4,62 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import javax.crypto.Cipher
 
 /**
- * Prompts for biometric or device-credential auth. The session calls this once
- * per cold start, then keeps the unwrapped database key in process memory.
+ * Prompts for biometric or device-credential auth once per cold start.
+ * On API 30 and newer the SQLCipher wrap cipher is a [BiometricPrompt.CryptoObject],
+ * so the fingerprint or device credential that succeeds is what authorizes the key.
+ * The unwrapped passphrase then stays in process memory.
  */
 class BiometricUnlockPrompt(
     private val activity: FragmentActivity,
     private val policy: KeystoreKeyPolicy = KeystoreKeyPolicy.DATABASE,
 ) : UnlockPrompt {
+    override fun bindsCipher(): Boolean = bindsKeystoreCipher(android.os.Build.VERSION.SDK_INT)
+
     override fun authenticate(onSuccess: () -> Unit, onFailure: () -> Unit) {
+        val prompt = biometricPrompt(
+            onAuthenticated = { onSuccess() },
+            onFailure = onFailure,
+        )
+        try {
+            prompt.authenticate(promptInfo(policy))
+        } catch (_: IllegalArgumentException) {
+            onFailure()
+        }
+    }
+
+    override fun authorize(cipher: Cipher, onSuccess: (Cipher) -> Unit, onFailure: () -> Unit) {
+        val prompt = biometricPrompt(
+            onAuthenticated = { result ->
+                val authorized = result.cryptoObject?.cipher ?: cipher
+                onSuccess(authorized)
+            },
+            onFailure = onFailure,
+        )
+        try {
+            prompt.authenticate(promptInfo(policy), BiometricPrompt.CryptoObject(cipher))
+        } catch (_: IllegalArgumentException) {
+            onFailure()
+        }
+    }
+
+    private fun biometricPrompt(
+        onAuthenticated: (BiometricPrompt.AuthenticationResult) -> Unit,
+        onFailure: () -> Unit,
+    ): BiometricPrompt {
         val executor = ContextCompat.getMainExecutor(activity)
-        val prompt = BiometricPrompt(
+        return BiometricPrompt(
             activity,
             executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    onSuccess()
+                    try {
+                        onAuthenticated(result)
+                    } catch (_: Exception) {
+                        onFailure()
+                    }
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -28,7 +67,6 @@ class BiometricUnlockPrompt(
                 }
             },
         )
-        prompt.authenticate(promptInfo(policy))
     }
 
     companion object {

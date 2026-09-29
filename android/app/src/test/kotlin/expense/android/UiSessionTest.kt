@@ -39,8 +39,8 @@ class UiSessionTest {
         session.accept(
             listOf(
                 InboundSms(
-                    sender = "LAB",
-                    body = "Charged EGP 20.00 at Shop",
+                    sender = "01005551234",
+                    body = "Debited EGP 20.00 for Shop",
                     providerMessageId = "1",
                     receivedAt = Instant.parse("2026-05-01T07:00:00Z"),
                 ),
@@ -107,7 +107,7 @@ class UiSessionTest {
         session.accept(
             listOf(
                 InboundSms(
-                    sender = "LAB",
+                    sender = "01005551234",
                     body = "Paid EGP 5.00 somewhere",
                     providerMessageId = "2",
                     receivedAt = Instant.parse("2026-05-04T07:00:00Z"),
@@ -117,6 +117,27 @@ class UiSessionTest {
         val waiting = ReviewSession.rows(session).single()
         assertTrue(ReviewSession.dismiss(session, waiting.attemptId).isEmpty())
         assertEquals("Paid EGP 5.00 somewhere", session.load().messages.last().body)
+    }
+
+    @Test
+    fun `an unknown bank purchase stays in review and out of analytics`() {
+        val session = openSession(File(directory.toFile(), "purchase.db"))
+        session.accept(
+            listOf(
+                InboundSms(
+                    sender = "01005559876",
+                    body = "Your card was used for EGP 450 at Talabat",
+                    providerMessageId = "c1",
+                    receivedAt = Instant.parse("2026-03-02T07:15:00Z"),
+                ),
+            ),
+        )
+        val stored = session.load()
+        assertTrue(stored.transactions.isEmpty())
+        assertEquals(1, stored.reviewQueue().size)
+        assertEquals("Your card was used for EGP 450 at Talabat", stored.messages.single().body)
+        val report = AnalyticsSession.report(session, AnalyticsSlice(month = YearMonth.of(2026, 3)))
+        assertTrue(report.totals.isEmpty())
     }
 
     private fun openSession(database: File): LedgerSession {

@@ -7,9 +7,9 @@ import expense.ledger.Correction
 import expense.ledger.LedgerState
 
 object LedgerSessionBindings {
-    fun load(session: LedgerSession): LedgerState = session.load()
+    fun load(session: LedgerSession): LedgerState = session.screen()
 
-    fun tree(session: LedgerSession): LedgerTree = LedgerTreeBuilder.build(session.load())
+    fun tree(session: LedgerSession): LedgerTree = LedgerTreeBuilder.build(session.screen())
 
     fun renameAccount(session: LedgerSession, accountId: String, displayName: String): LedgerState {
         return session.renameAccount(accountId, displayName)

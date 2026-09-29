@@ -3,7 +3,8 @@ package expense.ledger
 import expense.categories.CategorySource
 import expense.money.Money
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
+import expense.parse.SpendEffect
 import java.time.Instant
 import java.time.LocalDateTime
 
@@ -26,7 +27,8 @@ data class Transaction(
     val smsId: String,
     val institutionId: String,
     val accountId: String?,
-    val kind: TransactionKind,
+    val eventType: FinancialEventType,
+    val spendEffect: SpendEffect,
     val status: TransactionStatus,
     val amount: Money,
     val direction: Direction,

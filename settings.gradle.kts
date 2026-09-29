@@ -32,6 +32,7 @@ include(
     ":core:money",
     ":core:sms",
     ":core:parse",
+    ":core:intelligence",
     ":core:merchants",
     ":core:categories",
     ":core:ledger",

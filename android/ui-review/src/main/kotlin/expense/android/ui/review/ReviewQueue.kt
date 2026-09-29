@@ -12,12 +12,32 @@ data class ReviewRow(
     val receivedAt: Instant,
     val body: String?,
     val pipelineVersion: String,
+    val reason: String? = null,
+)
+
+data class ReviewPage(
+    val rows: List<ReviewRow>,
+    val offset: Int,
+    val total: Int,
 )
 
 object ReviewQueue {
-    fun rows(state: LedgerState): List<ReviewRow> {
-        return state.reviewQueue().map { attempt ->
-            val sms = state.messages.find { it.id == attempt.smsId }
+    const val PAGE_SIZE: Int = 20
+
+    fun rows(state: LedgerState): List<ReviewRow> = page(state, offset = 0, pageSize = Int.MAX_VALUE).rows
+
+    /**
+     * One window of the review queue. Only this window's SMS bodies are copied
+     * into the returned rows.
+     */
+    fun page(state: LedgerState, offset: Int, pageSize: Int = PAGE_SIZE): ReviewPage {
+        require(pageSize > 0)
+        val queued = state.reviewQueue()
+        val start = pageStart(queued.size, offset, pageSize)
+        val slice = queued.drop(start).take(pageSize)
+        val messages = state.messages.associateBy { it.id }
+        val rows = slice.map { attempt ->
+            val sms = messages[attempt.smsId]
             ReviewRow(
                 attemptId = attempt.id,
                 smsId = attempt.smsId,
@@ -26,7 +46,30 @@ object ReviewQueue {
                 receivedAt = sms?.receivedAt ?: Instant.EPOCH,
                 body = sms?.body,
                 pipelineVersion = attempt.pipelineVersion,
+                reason = attempt.error,
             )
+        }
+        return ReviewPage(rows = rows, offset = start, total = queued.size)
+    }
+
+    internal fun pageStart(total: Int, offset: Int, pageSize: Int): Int {
+        if (total <= 0) return 0
+        val requested = offset.coerceAtLeast(0)
+        if (requested < total) return requested
+        return ((total - 1) / pageSize) * pageSize
+    }
+
+    fun holdLabel(reason: String): String {
+        return when (reason) {
+            "ambiguous_meaning" -> "Ambiguous transaction"
+            "ambiguous_amount" -> "More than one amount"
+            "amount_missing" -> "Amount not found"
+            "validation" -> "Validation failed"
+            "low_confidence" -> "Low confidence"
+            "ambiguous_institution" -> "Ambiguous institution"
+            "unknown_institution" -> "Unknown institution"
+            "unverified_institution" -> "Unverified institution"
+            else -> reason
         }
     }
 

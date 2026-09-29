@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":core:money"))
     implementation(project(":core:sms"))
     implementation(project(":core:parse"))
+    api(project(":core:intelligence"))
     implementation(project(":core:merchants"))
     implementation(project(":core:categories"))
     implementation(project(":core:ledger"))

@@ -1,0 +1,1024 @@
+[
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your card was used to purchase EGP 65 at XYZ."
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A debit card transaction settled at the bookstore for 18 pounds."
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "We processed a store checkout on the plastic for USD 12.40."
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The retailer collected 90 dirhams through your linked card."
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "تم استخدام بطاقتك لشراء مبلغ 65 جنيه لدى المتجر"
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "اكتملت حركة البطاقة في المكتبة مقابل 18 جنيهاً"
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "المتجر حصل 90 درهماً عبر بطاقتك المرتبطة"
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The retailer collected the amount through بطاقتك بنجاح"
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your account ending with ****2219 is debited with amount EGP 54.00DR on 04 APR 2024 for a purchase at the market."
+  },
+  {
+    "name": "card_purchase",
+    "eventType": "CARD_PURCHASE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The account was debited for a purchase at the grocery. Available balance is shown afterwards."
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The shop tried to take money from the card but the attempt was declined."
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Card authorization failed before any funds left the account at the grocery."
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "No charge was posted. The checkout at the kiosk did not complete."
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Merchant request was rejected by the issuer. Nothing was collected."
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "حاول المتجر أخذ المبلغ من البطاقة لكن المحاولة رُفضت"
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "تفويض البطاقة فشل قبل أن يغادر أي مبلغ الحساب"
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "لم يُسجل خصم. الدفع عند الكشك لم يكتمل"
+  },
+  {
+    "name": "failed_card_purchase",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Merchant request rejected ولم يُحصل شيء من البطاقة"
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "You sent 200 pounds from your wallet to Nora."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Wallet funds moved successfully to account holder Karim."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The peer payment left your balance and reached Hana."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A completed remittance of 75 pounds went out to your brother."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أرسلت 200 جنيه من محفظتك إلى نورا"
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أموال المحفظة انتقلت بنجاح إلى صاحب الحساب كريم"
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "التحويل بين الأفراد خرج من رصيدك ووصل هناء"
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A completed remittance ذهب إلى أخيك من المحفظة"
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your account ending with ******9438 is debited with amount EGP 31.89DR on 31 MAR 2024 with transfer to another account."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The account was debited because a transfer to another account completed on 31 March."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Funds left the account through a completed transfer. The debit has posted."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A completed transfer to another account debited the account. Available balance afterwards is EGP 640.00."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your account was debited EGP 75.00 for a transfer to another account. Available limit remains EGP 4,000.00."
+  },
+  {
+    "name": "transfer_out",
+    "eventType": "BANK_TRANSFER",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "خُصم من حسابك مبلغ لأن تحويلاً مكتملاً خرج إلى حساب آخر."
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The wallet could not send money to Omar because the attempt did not finish."
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Transfer request to Layla was rejected. No value moved."
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "We were unable to move wallet funds to the recipient."
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Outgoing remittance did not go through. The recipient received nothing."
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "المحفظة لم تستطع إرسال المال إلى عمر لأن المحاولة لم تنته"
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "طلب التحويل إلى ليلى رُفض ولم تتحرك قيمة"
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "تعذر نقل أموال المحفظة إلى المستلم"
+  },
+  {
+    "name": "failed_transfer",
+    "eventType": "FAILED_TRANSACTION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Outgoing remittance did not go through والمستلم لم يستلم شيئاً"
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Sorry, there is not enough balance to renew the Plus 6000 package. Please add EGP 65."
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The monthly plan continuation was declined. Funds available are insufficient for the 65 pound bundle."
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "We could not extend your subscription. The remaining credit is short."
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Bundle continuation stopped. Please top up before the service can continue."
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "عفواً، رصيدك غير كافٍ لتجديد باقة Plus 6000. برجاء شحن 65 جنيه"
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "فشل تجديد الباقة لعدم كفاية الرصيد. يرجى إعادة الشحن"
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Plus 6000 لم يتم تجديدها لأن الرصيد غير كافٍ، اشحن 65 جنيه"
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "استمرار الباقة توقف. اشحن الخط قبل أن تعود الخدمة"
+  },
+  {
+    "name": "renewal_attempt",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The bundle could not renew لأن الرصيد أقل من 65 جنيه"
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your bundle is active again after the scheduled continuation."
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The monthly plan continued successfully and the service remains available."
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Subscription extension finished. Access stays open for another cycle."
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The package period rolled forward and the service is live."
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "تم تجديد باقتك بنجاح"
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "الباقة عادت للعمل بعد الاستمرار المجدول"
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "الخطة الشهرية استمرت بنجاح والخدمة متاحة"
+  },
+  {
+    "name": "renewal_success",
+    "eventType": "BILL_PAYMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Subscription extension finished والدورة الجديدة مفتوحة"
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Remaining credit on the wallet stands at 40 pounds."
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Here is what is currently available: 1,250 pounds."
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Snapshot of funds sitting in the account: eighty pounds."
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "No activity, just a note that the available amount is 15.50 pounds."
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "رصيد المحفظة الحالي 40 جنيهاً وهذا للعلم"
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "المتاح الآن: 1250 جنيهاً دون حركة"
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "لقطة للمبلغ الموجود في الحساب: ثمانون جنيهاً"
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "No activity, المتاح 15.50 جنيه فقط كإشعار"
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your account ending with ****1008 has available balance EGP 500.00. No transfer or debit took place."
+  },
+  {
+    "name": "balance",
+    "eventType": "BALANCE_NOTIFICATION",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Available balance is EGP 1,400.00. This notice does not debit the account and does not send a transfer."
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "This weekend only, enjoy a special deal when you visit."
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Exclusive invitation: a limited campaign is waiting."
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Unlock a bonus by entering the campaign token at checkout."
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Marketing note: a seasonal advantage is available if you opt in."
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "هذا الأسبوع فقط استمتع بعرض خاص عند الزيارة"
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "دعوة حصرية: حملة محدودة بانتظارك"
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "افتح الميزة بإدخال رمز الحملة"
+  },
+  {
+    "name": "promotion",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Marketing note: ميزة موسمية إذا اخترت المشاركة"
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Use 482193 as the single-use secret to approve the session."
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "A temporary passcode was issued for sign-in: 119900."
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Do not share the login verifier 554433 with anyone."
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Security challenge for the app session is 908172."
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "استخدم 482193 كرمز سري لمرة واحدة للموافقة على الجلسة"
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "أُصدر رمز مؤقت للدخول: 119900"
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "لا تشارك محقق الدخول 554433 مع أي شخص"
+  },
+  {
+    "name": "otp",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Security challenge للجلسة هو 908172"
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "The store returned 75 pounds to you after the return was accepted."
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Money came back from the merchant following a return."
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "A credit was issued by the shop for the returned item."
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "You received the purchase amount back from the seller."
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "أعاد المتجر 75 جنيهاً بعد قبول المرتجع"
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "عاد المال من التاجر بعد الإرجاع"
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "أصدر المتجر ائتماناً مقابل الصنف المرجع"
+  },
+  {
+    "name": "refund",
+    "eventType": "REFUND",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "You received the purchase amount back من البائع"
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "The earlier posting was undone and the amount was put back."
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "We cancelled the previous posting and restored the sum."
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "The transaction was voided and the funds were restored."
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "An earlier debit was undone by the issuer."
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "القيد السابق أُلغي وأُعيد المبلغ"
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "ألغينا القيد السابق واستعدنا القيمة"
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "أُبطلت العملية وعادت الأموال"
+  },
+  {
+    "name": "reversal",
+    "eventType": "REVERSAL",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "An earlier debit was undone بواسطة البنك"
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "An administrative charge of 5 pounds was added to the account."
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The institution levied a small charge for the service."
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A maintenance cost of five pounds has been taken."
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Banking charges totaling 5 pounds were assessed."
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أُضيف رسم إداري 5 جنيهات إلى الحساب"
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "فرضت المؤسسة رسماً صغيراً مقابل الخدمة"
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "مُحصّل تكلفة صيانة خمسة جنيهات"
+  },
+  {
+    "name": "fee",
+    "eventType": "FEE",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Banking charges بقيمة 5 جنيهات قُيدت"
+  },
+  {
+    "name": "transfer_in",
+    "eventType": "BANK_TRANSFER",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "A sum from your cousin has now arrived."
+  },
+  {
+    "name": "transfer_in",
+    "eventType": "BANK_TRANSFER",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Incoming value from Nora posted on your side."
+  },
+  {
+    "name": "transfer_in",
+    "eventType": "BANK_TRANSFER",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "مبلغ من ابن عمك وصل الآن"
+  },
+  {
+    "name": "transfer_in",
+    "eventType": "BANK_TRANSFER",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Incoming value from Nora وصل إلى جانبك"
+  },
+  {
+    "name": "transfer_in",
+    "eventType": "BANK_TRANSFER",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Your account was credited with amount EGP 120.00CR on 02 APR 2024 from a transfer by another account."
+  },
+  {
+    "name": "transfer_in",
+    "eventType": "BANK_TRANSFER",
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "An incoming transfer from another account has credited your account. Available balance is EGP 2,040.00."
+  },
+  {
+    "name": "cash_withdrawal",
+    "eventType": "CASH_WITHDRAWAL",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Banknotes came out of the machine for you."
+  },
+  {
+    "name": "cash_withdrawal",
+    "eventType": "CASH_WITHDRAWAL",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "You took physical notes from the automated dispenser."
+  },
+  {
+    "name": "cash_withdrawal",
+    "eventType": "CASH_WITHDRAWAL",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "خرجت أوراق نقدية من الماكينة إليك"
+  },
+  {
+    "name": "cash_withdrawal",
+    "eventType": "CASH_WITHDRAWAL",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "أخذت نقداً من جهاز الصرف"
+  },
+  {
+    "name": "payment",
+    "eventType": "BILL_PAYMENT",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The clinic invoice is closed after you settled it."
+  },
+  {
+    "name": "payment",
+    "eventType": "BILL_PAYMENT",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Rent reached the landlord and the bill is done."
+  },
+  {
+    "name": "payment",
+    "eventType": "BILL_PAYMENT",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "فاتورة العيادة أُغلقت بعد أن سددتها"
+  },
+  {
+    "name": "payment",
+    "eventType": "BILL_PAYMENT",
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "الإيجار وصل المالك والفاتورة انتهت"
+  },
+  {
+    "name": "service_recharge",
+    "eventType": "OTHER_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Talk time on the line increased after a successful refill."
+  },
+  {
+    "name": "service_recharge",
+    "eventType": "OTHER_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The prepaid handset received its airtime."
+  },
+  {
+    "name": "service_recharge",
+    "eventType": "OTHER_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "زاد وقت المكالمات بعد تعبئة ناجحة للخط"
+  },
+  {
+    "name": "service_recharge",
+    "eventType": "OTHER_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "الخط المدفوع مسبقاً استلم رصيد مكالمات"
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The spare key is under the mat."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Lunch is at noon, bring a notebook."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "المفتاح تحت السجادة في المدخل"
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "الغدا الساعة اتنين وهات معاك دفتر"
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your clinic appointment is confirmed for 29/09/2026 at 10:30. Please call 0223456789 if you need to reschedule. File 10442."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "تم تأكيد موعدك في العيادة يوم 29/09/2026 الساعة 10:30. للاستفسار اتصل على 01234567890"
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "طلبكم جاهز للاستلام. رقم الطلب 1842. نتمنى لكم زيارة سعيدة."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Thank you for dining with us. Your table bill was EGP 240. We hope to see you again."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Lab results are ready at reception. Reference 22910. This is not a payment request."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your order from the restaurant is ready. Order 7731."
+  },
+  {
+    "name": "other",
+    "eventType": "NOT_FINANCIAL",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Reminder: hospital visit tomorrow at 11:00. Patient number 883421."
+  },
+  {
+    "name": "payment_due",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "Kindly note the open invoice. Settlement is still in the future."
+  },
+  {
+    "name": "payment_due",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "A reminder arrived that the amount remains unpaid."
+  },
+  {
+    "name": "payment_due",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "الفاتورة ما زالت مفتوحة والتسوية لاحقة"
+  },
+  {
+    "name": "payment_due",
+    "eventType": "PAYMENT_DUE",
+    "direction": null,
+    "ambiguous": false,
+    "text": "تذكير وصل بأن المبلغ لم يُسدد بعد"
+  },
+  {
+    "name": "statement",
+    "eventType": "STATEMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "The period summary is ready to open."
+  },
+  {
+    "name": "statement",
+    "eventType": "STATEMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "An account recap was generated and contains no new debit."
+  },
+  {
+    "name": "statement",
+    "eventType": "STATEMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "ملخص الفترة جاهز للفتح"
+  },
+  {
+    "name": "statement",
+    "eventType": "STATEMENT",
+    "direction": null,
+    "ambiguous": false,
+    "text": "أُنشئ كشف للحساب بلا خصم جديد"
+  },
+  {
+    "name": "ambiguous_movement",
+    "eventType": "OTHER_FINANCIAL",
+    "direction": null,
+    "ambiguous": true,
+    "text": "لا نستطيع تحديد هل هذا مرتجع أم إلغاء قيد"
+  },
+  {
+    "name": "ambiguous_movement",
+    "eventType": "OTHER_FINANCIAL",
+    "direction": null,
+    "ambiguous": true,
+    "text": "Either a return or a void تم تطبيقه"
+  }
+]

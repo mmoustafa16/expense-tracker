@@ -1,0 +1,5 @@
+CREATE TABLE learned_sender (
+  sender TEXT NOT NULL PRIMARY KEY,
+  institution_id TEXT NOT NULL,
+  display_name TEXT NOT NULL
+);

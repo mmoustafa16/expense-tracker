@@ -7,7 +7,8 @@ import expense.merchants.MerchantKey
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
+import expense.parse.SpendEffect
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -18,7 +19,8 @@ import java.time.format.DateTimeFormatter
 data class ManualDraft(
     val amount: Money,
     val direction: Direction,
-    val kind: TransactionKind,
+    val eventType: FinancialEventType,
+    val spendEffect: SpendEffect = eventType.defaultSpendEffect(),
     val occurredAt: Instant,
     val occurredCivil: LocalDateTime,
     val merchantRaw: String?,
@@ -59,14 +61,15 @@ object ManualLedger {
                 mask = mask,
                 reference = draft.reference?.trim()?.takeIf { it.isNotEmpty() },
                 amount = draft.amount,
-                kind = draft.kind,
+                eventType = draft.eventType,
                 merchantKey = normalized,
                 minuteBucket = minute,
             ),
             smsId = "",
             institutionId = institutionId,
             accountId = accountId,
-            kind = draft.kind,
+            eventType = draft.eventType,
+            spendEffect = draft.spendEffect,
             status = TransactionStatus.POSTED,
             amount = draft.amount,
             direction = draft.direction,
@@ -82,7 +85,7 @@ object ManualLedger {
             foreignAmount = null,
             duplicateOfId = null,
             linkedTransactionId = null,
-            includeInSpend = SpendPolicy.include(draft.kind, TransactionStatus.POSTED),
+            includeInSpend = SpendPolicy.include(draft.spendEffect, TransactionStatus.POSTED),
             pipelineVersion = draft.pipelineVersion,
             profileVersion = "",
             installmentIndex = null,

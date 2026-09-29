@@ -12,6 +12,7 @@ import java.time.YearMonth
 
 data class AnalyticsSlice(
     val month: YearMonth? = null,
+    val year: Int? = null,
     val institutionId: String? = null,
     val accountId: String? = null,
     val categoryId: String? = null,
@@ -52,7 +53,24 @@ data class AnalyticsReport(
     val categories: List<CategoryTotal>,
     val merchants: List<MerchantTotal>,
     val transactionCount: Int,
-)
+    /** Ledger rows in this slice that are excluded from spending. */
+    val excludedTransactionCount: Int,
+) {
+    /**
+     * Names the population the totals were taken over.
+     *
+     * Analytics sums spend transactions, which is a narrower set than the ledger
+     * holds: a settled card balance, a transfer, and a voided row are all ledger
+     * rows that spending must not include. Saying so is why two screens can show
+     * different numbers and both be right.
+     */
+    fun population(): String {
+        val spending = "$transactionCount spend ${if (transactionCount == 1) "transaction" else "transactions"}"
+        if (excludedTransactionCount == 0) return spending
+        return "$spending · $excludedTransactionCount ledger " +
+            (if (excludedTransactionCount == 1) "row" else "rows") + " excluded from spending"
+    }
+}
 
 /**
  * Spend totals read from a ledger snapshot. Parent rows include descendant
@@ -78,12 +96,14 @@ object SpendAnalytics {
         val tree = CategoryOptions.tree(state.categories)
         val base = state.transactions.filter { matches(it, slice) }
         val scoped = applyCategory(base, tree, slice.categoryId)
+        val excluded = state.transactions.filter { !it.includeInSpend && inSlice(it, slice) }
         val showMerchants = slice.categoryId != null || slice.merchantId != null || slice.transactionId != null
         return AnalyticsReport(
             totals = sumByCurrency(scoped),
             categories = categoryRows(tree, base, slice.categoryId),
             merchants = if (showMerchants) merchantRows(state, scoped) else emptyList(),
             transactionCount = scoped.size,
+            excludedTransactionCount = excluded.size,
         )
     }
 
@@ -166,7 +186,14 @@ object SpendAnalytics {
 
     private fun matches(transaction: Transaction, slice: AnalyticsSlice): Boolean {
         if (!transaction.includeInSpend) return false
-        if (slice.month != null && SpendPolicy.spendMonth(transaction) != slice.month) return false
+        return inSlice(transaction, slice)
+    }
+
+    /** Slice filters without the spend rule, so excluded rows can be counted. */
+    private fun inSlice(transaction: Transaction, slice: AnalyticsSlice): Boolean {
+        val spendMonth = SpendPolicy.spendMonth(transaction)
+        if (slice.month != null && spendMonth != slice.month) return false
+        if (slice.month == null && slice.year != null && spendMonth.year != slice.year) return false
         if (slice.institutionId != null && transaction.institutionId != slice.institutionId) return false
         if (slice.accountId != null && transaction.accountId != slice.accountId) return false
         if (slice.merchantId != null && transaction.merchantId != slice.merchantId) return false
@@ -184,4 +211,13 @@ object SpendAnalytics {
     }
 
     const val UNCATEGORIZED: String = "uncategorized"
+}
+
+object AnalyticsCalendar {
+    fun years(months: List<YearMonth>): List<Int> = months.map { it.year }.distinct().sortedDescending()
+
+    fun monthsFor(months: List<YearMonth>, year: Int?): List<YearMonth> {
+        val scoped = if (year == null) months else months.filter { it.year == year }
+        return scoped.distinct().sortedDescending()
+    }
 }

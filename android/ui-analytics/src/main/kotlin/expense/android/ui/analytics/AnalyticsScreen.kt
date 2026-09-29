@@ -1,6 +1,5 @@
 package expense.android.ui.analytics
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,10 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +44,7 @@ fun AnalyticsRoute(
     refreshEpoch: Int,
     initialTransactionId: String?,
 ) {
-    var loaded by remember { mutableStateOf<LedgerState?>(null) }
+    var loaded by remember { mutableStateOf(session.peekScreen()) }
     var slice by remember(initialTransactionId) { mutableStateOf(AnalyticsSlice(transactionId = initialTransactionId)) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(refreshEpoch) {
@@ -93,7 +90,7 @@ fun AnalyticsScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        item { MonthChips(options.months, slice, onSlice) }
+        item { MonthSelectors(options.months, slice, onSlice) }
         item {
             SliceMenus(options, slice, onSlice)
         }
@@ -112,7 +109,7 @@ fun AnalyticsScreen(
                     Text(MoneyFormat.format(total.signedMinor, total.currency), style = MaterialTheme.typography.titleLarge)
                 }
             }
-            Text("${report.transactionCount} transactions")
+            Text(report.population())
         }
         item { HorizontalDivider() }
         item { Text("Categories", style = MaterialTheme.typography.titleMedium) }
@@ -152,27 +149,38 @@ fun AnalyticsScreen(
 }
 
 @Composable
-private fun MonthChips(
+private fun MonthSelectors(
     months: List<YearMonth>,
     slice: AnalyticsSlice,
     onSlice: (AnalyticsSlice) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        FilterChip(
-            selected = slice.month == null,
-            onClick = { onSlice(slice.copy(month = null)) },
-            label = { Text("All months") },
-        )
-        months.forEach { month ->
-            FilterChip(
-                selected = slice.month == month,
-                onClick = { onSlice(slice.copy(month = month)) },
-                label = { Text(month.toString()) },
-            )
+    val years = AnalyticsCalendar.years(months)
+    val monthOptions = AnalyticsCalendar.monthsFor(months, slice.year)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (months.isEmpty()) {
+            Text("No ledger transactions yet, so there is no month to choose.")
         }
+        DropdownField(
+            label = "Year",
+            options = years,
+            selected = slice.year,
+            optionLabel = { it.toString() },
+            placeholder = "All years",
+            onSelected = { year ->
+                val month = slice.month?.takeIf { it.year == year }
+                onSlice(slice.copy(year = year, month = month))
+            },
+            onClear = { onSlice(slice.copy(year = null, month = null)) },
+        )
+        DropdownField(
+            label = "Month",
+            options = monthOptions,
+            selected = slice.month,
+            optionLabel = { it.toString() },
+            placeholder = "All months",
+            onSelected = { month -> onSlice(slice.copy(month = month, year = month.year)) },
+            onClear = { onSlice(slice.copy(month = null)) },
+        )
     }
 }
 

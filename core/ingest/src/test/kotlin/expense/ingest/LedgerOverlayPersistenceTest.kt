@@ -18,9 +18,9 @@ import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.BankRegistry
 import expense.parse.Direction
+import expense.parse.FinancialEventType
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
-import expense.parse.TransactionKind
 import expense.sms.BodyHash
 import expense.sms.InboundSms
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -103,6 +103,7 @@ class LedgerOverlayPersistenceTest {
                     profileVersion = null,
                     templateId = null,
                     status = ParseStatus.UNSUPPORTED,
+                    eventType = FinancialEventType.CARD_PURCHASE,
                     confidence = null,
                     extraction = null,
                     error = null,
@@ -117,7 +118,7 @@ class LedgerOverlayPersistenceTest {
             ManualDraft(
                 amount = Money(2000, Currency.EGP),
                 direction = Direction.DEBIT,
-                kind = TransactionKind.PURCHASE,
+                eventType = FinancialEventType.CARD_PURCHASE,
                 occurredAt = receivedAt,
                 occurredCivil = LocalDateTime.of(2026, 5, 1, 9, 0),
                 merchantRaw = "Shop",
@@ -180,7 +181,8 @@ class LedgerOverlayPersistenceTest {
         smsId = "sms-x",
         institutionId = "bank-1",
         accountId = null,
-        kind = TransactionKind.PURCHASE,
+        eventType = FinancialEventType.CARD_PURCHASE,
+        spendEffect = FinancialEventType.CARD_PURCHASE.defaultSpendEffect(),
         status = expense.ledger.TransactionStatus.POSTED,
         amount = Money(100, Currency.EGP),
         direction = Direction.DEBIT,
