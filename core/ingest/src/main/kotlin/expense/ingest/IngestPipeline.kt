@@ -10,10 +10,14 @@ import expense.ledger.TransactionEvidence
 import expense.merchants.AliasSource
 import expense.intelligence.AmountRole
 import expense.intelligence.ClassificationDecision
+import expense.intelligence.DiscoverySourceKind
 import expense.intelligence.FinancialSmsIntelligence
 import expense.intelligence.InstitutionBootstrap
+import expense.intelligence.InstrumentKind
 import expense.intelligence.MoneyDirection
+import expense.intelligence.MutableInstitutionMemory
 import expense.intelligence.RegisteredSender
+import expense.intelligence.paymentInstrument
 import expense.intelligence.reviewHold
 import expense.intelligence.SmsText
 import expense.intelligence.TransactionClass
@@ -45,11 +49,25 @@ class IngestPipeline(
     intelligence: FinancialSmsIntelligence? = null,
 ) {
     private val suppliedIntelligence = intelligence
+    private val institutionMemory = MutableInstitutionMemory()
     private val intelligence: FinancialSmsIntelligence by lazy {
         suppliedIntelligence ?: FinancialSmsIntelligence.deterministic(
-            registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) } +
+            senders = registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) } +
                 InstitutionBootstrap.records,
+            memory = institutionMemory,
         )
+    }
+
+    fun preloadInstitutions(senders: Collection<String>) {
+        institutionMemory.preload(senders)
+    }
+
+    fun rememberedInstitutions(): Set<String> = institutionMemory.snapshot()
+
+    /** Card or account last-4 explicitly present in [body]. Null when the SMS does not state one. */
+    fun explicitAccount(body: String): ExplicitAccount? {
+        val instrument = paymentInstrument(body) ?: return null
+        return ExplicitAccount(mask = instrument.mask, kind = instrument.kind.toAccountKind())
     }
     private val matcher = BankMatcher(registry)
     private val poster = LedgerPoster(ids)
@@ -91,6 +109,7 @@ class IngestPipeline(
         val posting = decision.status == ParseStatus.PARSED && decision.profile != null && decision.extraction != null
         if (posting) {
             next = poster.post(next, stored, decision.profile!!, decision.extraction!!)
+            rememberInstitution(sms, assessment)
         }
         next = CorrectionOverlay.apply(next, ids)
         return IngestResult(
@@ -306,15 +325,9 @@ class IngestPipeline(
             MoneyDirection.CREDIT -> Direction.CREDIT
             MoneyDirection.DEBIT, null -> Direction.DEBIT
         }
-        val mask = assessment.entities.accountMask
-        val accountKind = when {
-            mask == null -> null
-            Regex("""(?i)\bcredit card\b""").containsMatchIn(body) -> AccountKind.CREDIT_CARD
-            Regex("""(?i)\bdebit card\b""").containsMatchIn(body) -> AccountKind.DEBIT_CARD
-            Regex("""(?i)\baccount\b""").containsMatchIn(body) -> AccountKind.ACCOUNT
-            Regex("""(?i)\bcard\b""").containsMatchIn(body) -> AccountKind.CARD
-            else -> null
-        }
+        val instrument = paymentInstrument(body)
+        val mask = instrument?.mask
+        val accountKind = instrument?.kind?.toAccountKind()
         return Extraction(
             confidence = assessment.classification.confidence,
             candidates = listOf(
@@ -331,6 +344,13 @@ class IngestPipeline(
                 ),
             ),
         )
+    }
+
+    private fun rememberInstitution(sms: InboundSms, assessment: ClassificationDecision) {
+        val verified = assessment.discovery.verifiedInstitution ?: return
+        if (verified.source != DiscoverySourceKind.INSTITUTIONAL_SENDER) return
+        if (paymentInstrument(sms.body) == null) return
+        institutionMemory.remember(sms.sender)
     }
 
     private fun ledgerKind(type: TransactionClass, direction: MoneyDirection?): TransactionKind {
@@ -388,4 +408,17 @@ class IngestPipeline(
         val extraction: Extraction? = null,
         val error: String? = null,
     )
+}
+
+data class ExplicitAccount(
+    val mask: String,
+    val kind: AccountKind,
+)
+
+private fun InstrumentKind.toAccountKind(): AccountKind = when (this) {
+    InstrumentKind.CREDIT_CARD -> AccountKind.CREDIT_CARD
+    InstrumentKind.DEBIT_CARD -> AccountKind.DEBIT_CARD
+    InstrumentKind.ACCOUNT -> AccountKind.ACCOUNT
+    InstrumentKind.CARD -> AccountKind.CARD
+    InstrumentKind.UNSPECIFIED -> AccountKind.UNSPECIFIED
 }

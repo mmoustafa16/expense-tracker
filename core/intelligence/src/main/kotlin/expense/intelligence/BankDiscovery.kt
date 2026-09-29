@@ -145,15 +145,47 @@ class PublicBankMetadata(
 }
 
 /**
- * Identifies an institution from the sender channel itself.
- *
- * An alphanumeric sender id or a short code is one institution: the address
- * that actually sent the SMS. The display name is that address. A handset
- * number, a blank sender, and a one- or two-character token are ambiguous and
- * produce no institution. This type does not read a bank list and does not
- * parse the message body.
+ * Senders this device has already accepted as notifying institutions.
+ * A sender is remembered only after a message from that exact address carried
+ * an explicit card or account instrument and was posted. The set starts empty.
  */
-class InstitutionalSenderDiscovery : BankDiscoverySource {
+fun interface InstitutionMemory {
+    fun remembers(sender: String): Boolean
+
+    companion object {
+        val EMPTY: InstitutionMemory = InstitutionMemory { false }
+    }
+}
+
+class MutableInstitutionMemory : InstitutionMemory {
+    private val known = linkedSetOf<String>()
+
+    fun remember(sender: String) {
+        val trimmed = sender.trim()
+        if (trimmed.isNotEmpty()) known += trimmed
+    }
+
+    fun preload(senders: Collection<String>) {
+        senders.forEach(::remember)
+    }
+
+    fun snapshot(): Set<String> = known.toSet()
+
+    override fun remembers(sender: String): Boolean = sender.trim() in known
+}
+
+/**
+ * Names the sender channel. An alphanumeric address or a short code is not a
+ * financial institution by itself.
+ *
+ * The channel is verified only when this message states a card or account
+ * instrument, or when this device already remembered that exact sender from an
+ * earlier instrument. A handset number, a blank sender, and a one- or
+ * two-character token produce no institution. This type does not read a bank list.
+ */
+class InstitutionalSenderDiscovery(
+    private val memory: InstitutionMemory = InstitutionMemory.EMPTY,
+) : BankDiscoverySource {
     override val kind: DiscoverySourceKind = DiscoverySourceKind.INSTITUTIONAL_SENDER
 
     override fun discover(message: SmsText): List<DiscoveredInstitution> {
@@ -161,13 +193,15 @@ class InstitutionalSenderDiscovery : BankDiscoverySource {
         if (!isInstitutionalChannel(sender)) return emptyList()
         val id = senderInstitutionId(sender)
         if (id.length < MIN_ID_LENGTH) return emptyList()
+        val instrument = paymentInstrument(message.body) != null
+        val remembered = memory.remembers(sender)
         return listOf(
             DiscoveredInstitution(
                 institutionId = id,
                 displayName = sender,
-                confidence = CHANNEL_CONFIDENCE,
+                confidence = if (instrument || remembered) CHANNEL_CONFIDENCE else CHANNEL_CANDIDATE,
                 source = kind,
-                verified = true,
+                verified = instrument || remembered,
                 evidence = listOf(
                     MatchedEvidence(EvidenceKind.SENDER_ALIAS, sender),
                     MatchedEvidence(EvidenceKind.SENDER_SHAPE, senderAddressShape(sender).name),
@@ -178,6 +212,7 @@ class InstitutionalSenderDiscovery : BankDiscoverySource {
 
     private companion object {
         const val CHANNEL_CONFIDENCE: Int = 90
+        const val CHANNEL_CANDIDATE: Int = 40
         const val MIN_ID_LENGTH: Int = 3
     }
 }

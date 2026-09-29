@@ -2,6 +2,7 @@ package expense.android
 
 import android.app.Application
 import expense.android.sms.InboundSmsSink
+import expense.android.sms.InboxCursor
 import expense.android.sms.SmsAccess
 import expense.android.sms.SmsPermissions
 import expense.android.storage.LedgerSession
@@ -16,8 +17,9 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Application shell. [MainActivity] shows the cold-start unlock and the local
  * ledger screens. Incoming SMS is delivered to [IncomingSmsReceiver], which
- * calls [smsIngestion]. The first granted inbox read scans the available SMS
- * inbox. Later messages arrive through the receiver.
+ * calls [smsIngestion]. Each unlock syncs inbox rows newer than the last
+ * stored provider message. [SMS_RECEIVED] still ingests messages while the
+ * process is alive. A later sync dedupes those rows.
  *
  * The encrypted ledger stays locked until [unlockLedger]. Messages accepted
  * before that stay in process memory and are written after the cold-start unlock.
@@ -60,26 +62,33 @@ class ExpenseTrackerApplication : Application() {
     }
 
     fun scanInboxIfGranted() {
-        if (inboxScanned()) {
-            if (reclassifyStoredMessages()) publishStoredSummary()
-            return
-        }
         val access = SmsAccess(this)
         if (!access.canReadInbox()) return
         if (!session.isUnlocked()) return
         if (!scanGate.tryStart()) return
         try {
-            inboxScanState.value = InboxScan(phase = InboxScanPhase.RUNNING, tally = IngestTally())
-            session.ingest(access.inboxSource()) { tally ->
-                inboxScanState.value = InboxScan(phase = InboxScanPhase.RUNNING, tally = tally)
+            val reclassified = reclassifyStoredMessages()
+            val relinked = session.relinkStoredAccounts()
+            val cursor = session.inboxCursor()?.let { (receivedAt, providerId) ->
+                InboxCursor(receivedAt, providerId)
             }
-            getSharedPreferences(SETUP_PREFS, MODE_PRIVATE)
-                .edit()
-                .putBoolean(INBOX_SCANNED, true)
-                .putInt(CLASSIFICATION_REVISION_KEY, CLASSIFICATION_REVISION)
-                .apply()
+            var ingested = false
+            session.ingest(access.inboxSource(cursor)) { tally ->
+                ingested = true
+                inboxScanState.value = inboxScanState.value.copy(
+                    phase = InboxScanPhase.RUNNING,
+                    tally = tally,
+                )
+            }
             scanGate.finish()
-            inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
+            if (reclassified || relinked > 0 || ingested) {
+                val generation = inboxScanState.value.generation + 1
+                inboxScanState.value = InboxScan(
+                    phase = InboxScanPhase.FINISHED,
+                    tally = session.storedTally(),
+                    generation = generation,
+                )
+            }
         } catch (_: SecurityException) {
             scanGate.abandon()
             inboxScanState.value = InboxScan()
@@ -88,12 +97,6 @@ class ExpenseTrackerApplication : Application() {
             inboxScanState.value = InboxScan()
             throw error
         }
-    }
-
-    private fun publishStoredSummary() {
-        if (inboxScanState.value.phase == InboxScanPhase.RUNNING) return
-        if (!session.isUnlocked()) return
-        inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
     }
 
     private fun reclassifyStoredMessages(): Boolean {
@@ -105,14 +108,9 @@ class ExpenseTrackerApplication : Application() {
         return true
     }
 
-    private fun inboxScanned(): Boolean {
-        return getSharedPreferences(SETUP_PREFS, MODE_PRIVATE).getBoolean(INBOX_SCANNED, false)
-    }
-
     private companion object {
         const val SETUP_PREFS = "expense_setup"
-        const val INBOX_SCANNED = "inbox_scanned"
         const val CLASSIFICATION_REVISION_KEY = "classification_revision"
-        const val CLASSIFICATION_REVISION = 4
+        const val CLASSIFICATION_REVISION = 5
     }
 }

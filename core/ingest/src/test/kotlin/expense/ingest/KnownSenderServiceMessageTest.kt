@@ -60,7 +60,7 @@ class KnownSenderServiceMessageTest {
         assertEquals(DiscoveryStatus.KNOWN, known.discovery.status)
         assertEquals("example.vodafone-cash", known.discovery.verifiedInstitution?.institutionId)
         assertEquals(DiscoveryStatus.KNOWN, unknown.discovery.status)
-        assertEquals("vodafone", unknown.discovery.verifiedInstitution?.institutionId)
+        assertNull(unknown.discovery.verifiedInstitution)
         assertFalse(known.postable)
         assertFalse(unknown.postable)
     }

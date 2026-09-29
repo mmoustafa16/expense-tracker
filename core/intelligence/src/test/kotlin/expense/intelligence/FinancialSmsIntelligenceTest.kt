@@ -16,7 +16,7 @@ class FinancialSmsIntelligenceTest {
     )
 
     @Test
-    fun `a handset number stays unknown and an alphanumeric sender is its own institution`() {
+    fun `a handset stays unknown and an alphanumeric sender is not a bank without an instrument`() {
         assertTrue(InstitutionBootstrap.records.isEmpty())
         assertTrue(InstitutionCatalog.bundled().isEmpty())
         val handset = intelligence.assess(SmsText("01005551234", "Charged EGP 10.00 at Shop"))
@@ -26,20 +26,22 @@ class FinancialSmsIntelligenceTest {
         listOf("CIB", "ALEXBANK", "VodafoneCash").forEach { sender ->
             val decision = intelligence.assess(SmsText(sender, "Charged EGP 10.00 at Shop"))
             assertEquals(DiscoveryStatus.KNOWN, decision.discovery.status, sender)
-            assertEquals(senderInstitutionId(sender), decision.discovery.verifiedInstitution?.institutionId, sender)
-            assertEquals(sender, decision.discovery.verifiedInstitution?.displayName, sender)
-            assertEquals(DiscoverySourceKind.INSTITUTIONAL_SENDER, decision.discovery.verifiedInstitution?.source, sender)
-            assertTrue(decision.postable, sender)
+            assertEquals(senderInstitutionId(sender), decision.discovery.candidates.single().institutionId, sender)
+            assertNull(decision.discovery.verifiedInstitution, sender)
+            assertEquals("unverified_institution", decision.reviewHold(), sender)
+            assertFalse(decision.postable, sender)
         }
     }
 
     @Test
-    fun `sender CIB is verified from the channel and a different address is a different institution`() {
-        val decision = intelligence.assess(SmsText("CIB", "Charged EGP 10.00 at Shop"))
+    fun `an explicit card mask verifies the sender channel and a different address stays different`() {
+        val decision = intelligence.assess(SmsText("CIB", "Charged EGP 10.00 at Shop on card ****4229"))
         assertEquals("cib", decision.discovery.verifiedInstitution?.institutionId)
         assertEquals("CIB", decision.discovery.verifiedInstitution?.displayName)
+        assertEquals(DiscoverySourceKind.INSTITUTIONAL_SENDER, decision.discovery.verifiedInstitution?.source)
+        assertEquals("4229", decision.entities.accountMask)
         assertTrue(decision.postable)
-        val other = intelligence.assess(SmsText("CIB-EG", "Charged EGP 10.00 at Shop"))
+        val other = intelligence.assess(SmsText("CIB-EG", "Charged EGP 10.00 at Shop on card ****1008"))
         assertEquals("cibeg", other.discovery.verifiedInstitution?.institutionId)
         assertEquals("CIB-EG", other.discovery.verifiedInstitution?.displayName)
         assertTrue(other.postable)

@@ -70,5 +70,6 @@ fun AccountKind.readable(): String {
         AccountKind.PREPAID -> "Prepaid"
         AccountKind.MEEZA -> "Meeza"
         AccountKind.CARD -> "Card"
+        AccountKind.UNSPECIFIED -> "Unspecified"
     }
 }

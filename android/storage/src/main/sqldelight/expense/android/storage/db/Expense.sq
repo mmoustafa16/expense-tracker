@@ -147,6 +147,12 @@ CREATE TABLE review_dismissal (
   provider_message_id TEXT
 );
 
+CREATE TABLE learned_sender (
+  sender TEXT NOT NULL PRIMARY KEY,
+  institution_id TEXT NOT NULL,
+  display_name TEXT NOT NULL
+);
+
 deleteMessages:
 DELETE FROM stored_sms;
 
@@ -498,3 +504,36 @@ WHERE id = :id;
 
 deleteCandidatesForAttempt:
 DELETE FROM extraction_candidate WHERE attempt_id = :attemptId;
+
+selectInboxHighWater:
+SELECT provider_message_id AS providerMessageId, received_at AS receivedAt
+FROM stored_sms
+WHERE provider_message_id GLOB '[0-9]*'
+  AND provider_message_id NOT GLOB '*[^0-9]*'
+ORDER BY received_at DESC, CAST(provider_message_id AS INTEGER) DESC
+LIMIT 1;
+
+selectLearnedSenders:
+SELECT sender FROM learned_sender ORDER BY sender;
+
+insertLearnedSender:
+INSERT OR IGNORE INTO learned_sender(sender, institution_id, display_name)
+VALUES (:sender, :institutionId, :displayName);
+
+selectUnlinkedTransactions:
+SELECT t.id AS transactionId, t.institution_id AS institutionId, t.amount_currency AS currency, s.body AS body
+FROM ledger_transaction t
+INNER JOIN stored_sms s ON s.id = t.sms_id
+WHERE t.account_id IS NULL
+  AND t.manual = 0
+  AND s.body IS NOT NULL
+ORDER BY t.id
+LIMIT :limit OFFSET :offset;
+
+selectAccountId:
+SELECT id FROM account
+WHERE institution_id = :institutionId AND kind = :kind AND mask = :mask
+LIMIT 1;
+
+updateTransactionAccount:
+UPDATE ledger_transaction SET account_id = :accountId WHERE id = :id;

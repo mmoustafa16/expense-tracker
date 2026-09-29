@@ -242,7 +242,7 @@ class LedgerRepositoryTest {
         val promo = "Save EGP 50 this weekend. Use code 20"
         val otp = "Your OTP is 482193"
         val balance = "Your available balance is EGP 1,250.00"
-        val charged = "Charged EGP 20.00 at Shop"
+        val charged = "Charged EGP 20.00 at Shop on card ****4242"
         val parsed = "TB|purchase|EGP|10.00|Shop|4242|S1|15/01/2026 10:00"
         repository.save(
             LedgerState(
@@ -374,6 +374,52 @@ class LedgerRepositoryTest {
         assertEquals(TransactionKind.PURCHASE, loaded.transactions.single().kind)
         assertEquals(0, repository.reviewWindow(0, 20).total)
         assertEquals(0, reclassify(repository, pipeline, pageSize = 1))
+    }
+
+    @Test
+    fun `relink attaches only the account the sms states`() {
+        val repository = memoryRepository()
+        val maskedBody = "Your credit card ****4229 was charged EGP 41.76 at Uber"
+        val bareBody = "Charged EGP 5.00 at Uber"
+        val received = Instant.parse("2026-09-28T17:58:00Z")
+        repository.save(
+            LedgerState(
+                messages = listOf(
+                    StoredSms("masked", "CIB", maskedBody, BodyHash.sha256(maskedBody), "1", received),
+                    StoredSms("bare", "CIB", bareBody, BodyHash.sha256(bareBody), "2", received.plusSeconds(60)),
+                ),
+                transactions = listOf(
+                    sampleTransaction(null).copy(
+                        id = "tx-mask",
+                        dedupKey = "d1",
+                        smsId = "masked",
+                        accountId = null,
+                        institutionId = "cib",
+                        merchantId = null,
+                    ),
+                    sampleTransaction(null).copy(
+                        id = "tx-bare",
+                        dedupKey = "d2",
+                        smsId = "bare",
+                        accountId = null,
+                        institutionId = "cib",
+                        merchantId = null,
+                    ),
+                ),
+            ),
+        )
+        assertEquals(received.plusSeconds(60).toEpochMilli() to 2L, repository.inboxHighWater())
+        val pipeline = IngestPipeline()
+        assertEquals(
+            1,
+            repository.relinkUnassigned(10, pipeline::explicitAccount) { "acct-new" },
+        )
+        val loaded = repository.load()
+        assertEquals("acct-new", loaded.transactions.single { it.id == "tx-mask" }.accountId)
+        assertEquals(null, loaded.transactions.single { it.id == "tx-bare" }.accountId)
+        assertEquals("4229", loaded.accounts.single().mask)
+        assertEquals(AccountKind.CREDIT_CARD, loaded.accounts.single().kind)
+        assertEquals(0, repository.relinkUnassigned(10, pipeline::explicitAccount) { "acct-again" })
     }
 
     @Test

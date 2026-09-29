@@ -1161,6 +1161,69 @@
     "text": "الغدا الساعة اتنين وهات معاك دفتر"
   },
   {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your clinic appointment is confirmed for 29/09/2026 at 10:30. Please call 0223456789 if you need to reschedule. File 10442."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "تم تأكيد موعدك في العيادة يوم 29/09/2026 الساعة 10:30. للاستفسار اتصل على 01234567890"
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "طلبكم جاهز للاستلام. رقم الطلب 1842. نتمنى لكم زيارة سعيدة."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Thank you for dining with us. Your table bill was EGP 240. We hope to see you again."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Lab results are ready at reception. Reference 22910. This is not a payment request."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your order from the restaurant is ready. Order 7731."
+  },
+  {
+    "name": "other",
+    "transactionClass": "OTHER_NON_TRANSACTION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Reminder: hospital visit tomorrow at 11:00. Patient number 883421."
+  },
+  {
     "name": "payment_due",
     "transactionClass": "PAYMENT_DUE",
     "transactionCompleted": false,

@@ -63,13 +63,13 @@ class ArabicVodafoneRenewalReviewTest {
     }
 
     @Test
-    fun `an arabic completed card purchase posts for an institutional sender and stays in review for a handset`() {
+    fun `an arabic completed card purchase without an instrument stays in review`() {
         val open = IngestPipeline(ids = RenewalIds())
         val purchase = open.ingest(message("VF-EG", arabicPurchase, "purchase"))
-        assertEquals(ParseStatus.PARSED, purchase.status)
-        assertTrue(purchase.posted)
-        assertEquals("vfeg", purchase.state.transactions.single().institutionId)
-        assertTrue(purchase.state.reviewQueue().isEmpty())
+        assertEquals(ParseStatus.UNSUPPORTED, purchase.status)
+        assertEquals("unverified_institution", purchase.attempt?.error)
+        assertFalse(purchase.posted)
+        assertTrue(purchase.state.transactions.isEmpty())
         val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("VF-EG", arabicPurchase))
         assertEquals("card_purchase", decision.classification.semantics?.intent)
         assertTrue(decision.classification.semantics!!.transactionCompleted)

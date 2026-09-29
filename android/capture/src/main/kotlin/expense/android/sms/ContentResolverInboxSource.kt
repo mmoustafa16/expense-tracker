@@ -13,6 +13,7 @@ import expense.sms.SmsSource
 class ContentResolverInboxSource(
     private val resolver: ContentResolver,
     private val readGranted: () -> Boolean,
+    private val after: InboxCursor? = null,
 ) : SmsSource {
     init {
         check(InboxQuery.ID == Telephony.Sms._ID)
@@ -34,8 +35,8 @@ class ContentResolverInboxSource(
         val cursor = resolver.query(
             Telephony.Sms.Inbox.CONTENT_URI,
             InboxQuery.projection,
-            null,
-            null,
+            after?.selection(),
+            after?.args(),
             InboxQuery.sortOrder,
         ) ?: return
         cursor.use { rows ->

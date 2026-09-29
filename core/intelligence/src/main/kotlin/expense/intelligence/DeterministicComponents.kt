@@ -33,7 +33,7 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
             currency = amountChoice?.currency,
             currencyToken = amountChoice?.currencyToken,
             merchant = findMerchant(folded),
-            accountMask = findMask(folded),
+            accountMask = paymentInstrument(folded)?.mask,
             reference = findReference(folded),
             occurredAt = occurred,
             balance = balance,
@@ -99,11 +99,6 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
         val kept = words.takeWhile { it.lowercase() !in merchantStops }
         val name = kept.joinToString(" ").trim { it.isWhitespace() || it == '.' || it == ',' }
         return name.ifBlank { null }
-    }
-
-    private fun findMask(folded: String): String? {
-        val match = maskPattern.find(folded) ?: return null
-        return match.groupValues.drop(1).firstOrNull { it.isNotBlank() }
     }
 
     private fun findReference(folded: String): String? {
@@ -172,16 +167,13 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
             "on", "ref", "reference", "available", "balance", "for", "with", "card", "ending",
             "your", "the", "a", "an", "another", "this", "that", "was", "is", "has",
         )
-        val maskPattern = Regex(
-            """(?i)\b(?:card|account|acct)\s+ending(?:\s+with)?\s+\**(\d{4})\b|\bending(?:\s+with)?\s+\**(\d{4})\b|\b(?:card|account|acct)\s*#+\s*(\d{4})\b""",
-        )
         val referencePattern = Regex("""(?i)\bref(?:erence)?[:\s#-]+([A-Za-z0-9]{2,})""")
         val numericDate = Regex(
-            """\b(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?:\s+at)?(?:\s+(\d{1,2}:\d{2}))?\b""",
+            """\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{2}|\d{4})(?:\s+at)?(?:\s+(\d{1,2}:\d{2}))?\b""",
             RegexOption.IGNORE_CASE,
         )
         val namedDate = Regex(
-            """(?i)\b(\d{1,2})\s+((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\s+(\d{4})(?:\s+at)?(?:\s+(\d{1,2}:\d{2}))?\b""",
+            """(?i)\b(\d{1,2})[\s\-]((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)[\s\-](\d{4})(?:\s+at)?(?:\s+(\d{1,2}:\d{2}))?\b""",
         )
         val months = mapOf(
             "jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6,
@@ -235,3 +227,49 @@ class DeterministicTransactionValidator : TransactionValidator {
         val supported = setOf("EGP", "USD", "EUR", "GBP")
     }
 }
+
+/**
+ * Last-4 digits the SMS states next to a card, an account, or a mask.
+ * A bare number, an order number, and a phone number are not an instrument.
+ */
+data class PaymentInstrument(
+    val mask: String,
+    val kind: InstrumentKind,
+)
+
+enum class InstrumentKind {
+    CREDIT_CARD,
+    DEBIT_CARD,
+    ACCOUNT,
+    CARD,
+    UNSPECIFIED,
+}
+
+fun paymentInstrument(body: String): PaymentInstrument? {
+    val folded = DigitFold.fold(body)
+    val match = instrumentPattern.find(folded) ?: return null
+    val mask = match.groupValues.drop(1).firstOrNull { it.length == 4 && it.all(Char::isDigit) } ?: return null
+    val start = (match.range.first - 48).coerceAtLeast(0)
+    val window = folded.substring(start, match.range.last + 1)
+    return PaymentInstrument(mask, instrumentKind(window))
+}
+
+private fun instrumentKind(window: String): InstrumentKind {
+    return when {
+        creditInstrument.containsMatchIn(window) -> InstrumentKind.CREDIT_CARD
+        debitInstrument.containsMatchIn(window) -> InstrumentKind.DEBIT_CARD
+        accountInstrument.containsMatchIn(window) -> InstrumentKind.ACCOUNT
+        cardInstrument.containsMatchIn(window) -> InstrumentKind.CARD
+        else -> InstrumentKind.UNSPECIFIED
+    }
+}
+
+private val instrumentWord =
+    """(?:\b(?:credit\s+card|debit\s+card|card|account|acct)\b|\ba/c\b|بطاقة\s+ائتمان|بطاقة\s+خصم|بطاقتك|بطاقة|حسابك|حساب|المنتهية)"""
+private val instrumentPattern = Regex(
+    """(?i)(?:$instrumentWord\s*(?:(?:no\.?|number|رقم|ending|ends|#)\s*)?(?:(?:with|in|بـ|برقم)\s*)?(?:[*xX•●·]|\s)*(\d{4})\b)|(?:[*xX•●·]{2,}\s*(\d{4})\b)|(?:\b(?:ending|ends)\s+(?:(?:with|in)\s+)?(?:[*xX•●·]|\s)*(\d{4})\b)""",
+)
+private val creditInstrument = Regex("""(?i)\bcredit\s+card\b|بطاقة\s+ائتمان|ائتمان""")
+private val debitInstrument = Regex("""(?i)\bdebit\s+card\b|بطاقة\s+خصم""")
+private val accountInstrument = Regex("""(?i)\b(?:account|acct|a/c)\b|حساب""")
+private val cardInstrument = Regex("""(?i)\bcard\b|بطاقة""")

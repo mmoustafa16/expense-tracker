@@ -26,6 +26,13 @@ class InboxSmsConverterTest {
     }
 
     @Test
+    fun `the inbox cursor asks only for rows after the stored provider message`() {
+        val cursor = InboxCursor(receivedAtMillis = 1_700_000_000_000, providerMessageId = 88)
+        assertEquals("(date > ?) OR (date = ? AND _id > ?)", cursor.selection())
+        assertEquals(arrayOf("1700000000000", "1700000000000", "88").toList(), cursor.args().toList())
+    }
+
+    @Test
     fun `missing sender and body become empty strings and the provider id is kept`() {
         val message = InboxSmsConverter.convert(
             InboxSmsRow(

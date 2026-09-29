@@ -38,12 +38,26 @@ class CibReviewHoldTest {
     @Test
     fun `a clear charge without a merchant still posts and incomplete messages stay in review`() {
         val plain = intelligence.assess(SmsText("CIB", "Your card was charged EGP 40.00"))
-        assertTrue(plain.postable)
+        assertFalse(plain.postable)
+        assertEquals("unverified_institution", plain.reviewHold())
         assertNull(plain.entities.merchant)
-        assertNull(plain.reviewHold())
+        assertNull(plain.entities.accountMask)
+
+        val masked = intelligence.assess(
+            SmsText("CIB", "Your credit card ****4229 was charged EGP 41.76 at Uber on 28-09-2026 at 19:58."),
+        )
+        assertTrue(masked.postable)
+        assertEquals("4229", masked.entities.accountMask)
+        assertEquals(
+            InstrumentKind.CREDIT_CARD,
+            paymentInstrument("Your credit card ****4229 was charged EGP 41.76 at Uber on 28-09-2026 at 19:58.")?.kind,
+        )
+        assertEquals("Uber", masked.entities.merchant)
+        assertEquals(LocalDateTime.of(2026, 9, 28, 19, 58), masked.entities.occurredAt)
 
         val arabic = intelligence.assess(SmsText("CIB", "تم استخدام بطاقتك لشراء مبلغ 65 جنيه لدى المتجر"))
-        assertTrue(arabic.postable)
+        assertFalse(arabic.postable)
+        assertEquals("unverified_institution", arabic.reviewHold())
         assertEquals("المتجر", arabic.entities.merchant)
 
         val twoAmounts = intelligence.assess(SmsText("CIB", "You paid EGP 20.00 and EGP 5.00 at Shop"))

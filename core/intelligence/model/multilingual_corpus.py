@@ -23,6 +23,8 @@ EXTRA_TRAIN = {
         "Your account was debited because the bookstore purchase completed. The remaining balance is quoted after the sale.",
         "تم خصم ثمن الشراء من الحساب بعد اكتمال عملية البطاقة في المتجر. الرصيد المتاح مذكور بعد العملية.",
         "The shop purchase finished and the account was debited. Available balance remains listed underneath.",
+        "Your credit card ****6620 was charged EGP 44.00 at the bookstore on 03/02/2025 at 18:11.",
+        "EGP 18.00 was spent using card ****1008 at the pharmacy.",
     ],
     "failed_card_purchase": [
         "رفض البنك محاولة الشراء بالبطاقة ولم يخرج شيء",
@@ -111,6 +113,9 @@ EXTRA_TRAIN = {
         "المبلغ رجع إليك من البائع بعد المرتجع",
         "المتجر أصدر ائتماناً مقابل المنتج المرجع",
         "The shop returned 75 جنيه بعد قبول المرتجع",
+        "عاد المبلغ من التاجر بعد أن قُبل المرتجع",
+        "التاجر أعاد ثمن السلعة لأن الإرجاع اكتمل",
+        "Money came back from the merchant after the return was accepted.",
     ],
     "reversal": [
         "أُلغي القيد السابق وعاد المبلغ",
@@ -261,6 +266,16 @@ EXTRA_TRAIN = {
         "المفتاح تحت الحصيرة عند الباب",
         "الدفتر على المكتب",
         "نتقابل عند المدخل",
+        "Your hospital appointment is booked for 12/08/2026 at 09:00. Call 0233344455 to change it. Patient file 55210.",
+        "Clinic visit reminder for tomorrow morning. Bring your papers. Reference 7712 is only a file number.",
+        "تم حجز موعد في العيادة الساعة التاسعة. للاتصال 0222222222",
+        "نتائج التحاليل جاهزة في الاستقبال. رقم الملف 44190 وهذا ليس تحويلاً.",
+        "Your restaurant order is prepared. Pickup number 6601.",
+        "The kitchen finished the meal. Order number 2291 is ready at the counter.",
+        "طلب المطعم صار جاهزاً. رقم الاستلام 3381.",
+        "Thanks for eating with us tonight. The table total was EGP 180. Come back soon.",
+        "We enjoyed hosting you. The bill at the table was 95 pounds.",
+        "شكرا لزيارتكم المطعم. قيمة الفاتورة على الطاولة 150 جنيهاً ونتمنى عودتكم.",
     ],
 }
 
@@ -381,5 +396,12 @@ EXTRA_HELD = {
     "other": [
         "المفتاح تحت السجادة في المدخل",
         "الغدا الساعة اتنين وهات معاك دفتر",
+        "Your clinic appointment is confirmed for 29/09/2026 at 10:30. Please call 0223456789 if you need to reschedule. File 10442.",
+        "تم تأكيد موعدك في العيادة يوم 29/09/2026 الساعة 10:30. للاستفسار اتصل على 01234567890",
+        "طلبكم جاهز للاستلام. رقم الطلب 1842. نتمنى لكم زيارة سعيدة.",
+        "Thank you for dining with us. Your table bill was EGP 240. We hope to see you again.",
+        "Lab results are ready at reception. Reference 22910. This is not a payment request.",
+        "Your order from the restaurant is ready. Order 7731.",
+        "Reminder: hospital visit tomorrow at 11:00. Patient number 883421.",
     ],
 }

@@ -37,14 +37,14 @@ class PipelineSmsSinkTest {
         assertEquals(listOf("11", "12", "13", "14"), state.messages.map { it.providerMessageId })
         assertEquals(
             listOf(
-                ParseStatus.PARSED,
-                ParseStatus.PARSED,
-                ParseStatus.PARSED,
+                ParseStatus.UNSUPPORTED,
+                ParseStatus.UNSUPPORTED,
+                ParseStatus.UNSUPPORTED,
                 ParseStatus.IGNORED_NOT_BANK,
             ),
             state.attempts.map { it.status },
         )
-        assertEquals(3, state.transactions.size)
+        assertTrue(state.transactions.isEmpty())
         assertTrue(state.accounts.isEmpty())
     }
 
@@ -90,7 +90,7 @@ class PipelineSmsSinkTest {
         assertEquals("11", messages[1].providerMessageId)
         assertEquals("Debited EGP 4 for Shop", messages[0].body)
         assertEquals(1, sink.ledgerState().attempts.size)
-        assertEquals(1, sink.ledgerState().transactions.size)
+        assertTrue(sink.ledgerState().transactions.isEmpty())
     }
 
     @Test

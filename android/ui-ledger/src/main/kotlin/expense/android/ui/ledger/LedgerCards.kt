@@ -5,6 +5,7 @@ import expense.ledger.Account
 import expense.ledger.LedgerState
 import expense.ledger.Transaction
 import expense.money.Currency
+import expense.parse.AccountKind
 import expense.parse.Direction
 import expense.parse.TransactionKind
 import java.time.LocalTime
@@ -78,7 +79,7 @@ object LedgerCards {
 
     private fun channel(state: LedgerState, transaction: Transaction, account: Account?): String {
         val institution = institutionLabel(state, transaction)
-        val kind = account?.kind?.readable()
+        val kind = account?.kind?.takeUnless { it == AccountKind.UNSPECIFIED }?.readable()
         val mask = account?.mask?.takeIf { it.isNotBlank() }?.let { "••••$it" }
         return listOfNotNull(institution, kind, mask).joinToString(" · ").ifBlank { "Unknown" }
     }
@@ -86,8 +87,9 @@ object LedgerCards {
     private fun channel(state: LedgerState, account: Account, mask: Boolean): String {
         val sample = state.transactions.firstOrNull { it.accountId == account.id }
         val institution = sample?.let { institutionLabel(state, it) } ?: account.institutionId
+        val kind = account.kind.takeUnless { it == AccountKind.UNSPECIFIED }?.readable()
         val digits = if (mask && account.mask.isNotBlank()) "••••${account.mask}" else null
-        return listOfNotNull(institution, account.kind.readable(), digits).joinToString(" · ")
+        return listOfNotNull(institution, kind, digits).joinToString(" · ")
     }
 
     private fun institutionLabel(state: LedgerState, transaction: Transaction): String {

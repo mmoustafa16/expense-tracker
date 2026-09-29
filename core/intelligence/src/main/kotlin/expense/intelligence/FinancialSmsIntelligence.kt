@@ -7,9 +7,10 @@ package expense.intelligence
  *
  * Classification and extraction run even when discovery returns unknown.
  * A ledger post needs one verified institution plus a validated high-confidence
- * transaction. The institution comes from an explicit sender record, public
- * metadata, or the sender channel itself. A handset number, an ambiguous
- * claim, and an incomplete transaction stay in review.
+ * transaction. An alphanumeric sender is only a candidate. It is verified when
+ * the message states a card or account, when that exact sender was remembered
+ * from an earlier instrument, or when a registry or metadata record matches.
+ * A handset number, an ambiguous claim, and an incomplete transaction stay in review.
  *
  * The default classifier is the bundled on-device semantic model.
  * [replacing] swaps that model without changing discovery, validation, or the ledger.
@@ -75,6 +76,7 @@ class FinancialSmsIntelligence(
             senders: List<RegisteredSender> = InstitutionBootstrap.records,
             userConfirmed: List<UserConfirmedSender> = emptyList(),
             evidence: List<LocalInstitutionEvidence> = emptyList(),
+            memory: InstitutionMemory = InstitutionMemory.EMPTY,
         ): FinancialSmsIntelligence {
             return replacing(
                 classifier = SemanticTransactionClassifier.bundled(),
@@ -82,6 +84,7 @@ class FinancialSmsIntelligence(
                 senders = senders,
                 userConfirmed = userConfirmed,
                 evidence = evidence,
+                memory = memory,
             )
         }
 
@@ -96,6 +99,7 @@ class FinancialSmsIntelligence(
             senders: List<RegisteredSender> = InstitutionBootstrap.records,
             userConfirmed: List<UserConfirmedSender> = emptyList(),
             evidence: List<LocalInstitutionEvidence> = emptyList(),
+            memory: InstitutionMemory = InstitutionMemory.EMPTY,
         ): FinancialSmsIntelligence {
             return FinancialSmsIntelligence(
                 discovery = CompositeBankDiscovery(
@@ -106,7 +110,7 @@ class FinancialSmsIntelligence(
                         UserConfirmedSenders(userConfirmed),
                         OnDeviceModelDiscovery(),
                         LocalLearnedPatterns(),
-                        InstitutionalSenderDiscovery(),
+                        InstitutionalSenderDiscovery(memory),
                     ),
                 ),
                 classifier = classifier,

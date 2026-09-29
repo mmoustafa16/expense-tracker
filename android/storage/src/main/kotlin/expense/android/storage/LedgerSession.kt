@@ -262,7 +262,9 @@ class LedgerSession(
                 pageTally = pageTally.add(result)
             }
             synchronized(lock) {
-                repositoryLocked().append(before, cursor)
+                val repository = repositoryLocked()
+                repository.append(before, cursor)
+                repository.rememberSenders(pipeline.rememberedInstitutions())
                 invalidateCaches()
             }
             working = cursor.withoutMessageBodies()
@@ -273,9 +275,11 @@ class LedgerSession(
 
     private fun writeLocked(messages: List<InboundSms>) {
         if (messages.isEmpty()) return
-        repositoryLocked().update { state ->
+        val repository = repositoryLocked()
+        repository.update { state ->
             pipeline.ingestAll(SmsSource { messages }, state)
         }
+        repository.rememberSenders(pipeline.rememberedInstitutions())
         invalidateCaches()
     }
 
@@ -286,8 +290,29 @@ class LedgerSession(
         val database = ExpenseDatabase(driver)
         val created = SqlDelightLedgerRepository(database)
         created.ensureSeed()
+        pipeline.preloadInstitutions(created.learnedSenders())
         repository = created
         return created
+    }
+
+    /** Provider date and id of the newest stored inbox row, when one exists. */
+    fun inboxCursor(): Pair<Long, Long>? = synchronized(lock) {
+        if (passphrase == null) return null
+        repositoryLocked().inboxHighWater()
+    }
+
+    /** Links posted transactions whose SMS states a card or account. Returns how many changed. */
+    fun relinkStoredAccounts(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE): Int {
+        return synchronized(lock) {
+            if (passphrase == null) return 0
+            val linked = repositoryLocked().relinkUnassigned(
+                pageSize = pageSize,
+                identify = pipeline::explicitAccount,
+                newAccountId = ids::newId,
+            )
+            if (linked > 0) invalidateCaches()
+            linked
+        }
     }
 }
 

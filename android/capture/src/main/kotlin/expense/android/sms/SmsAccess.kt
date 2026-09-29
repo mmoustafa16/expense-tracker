@@ -12,7 +12,9 @@ class SmsAccess(private val context: Context) {
 
     fun canReceiveSms(): Boolean = granted(SmsPermissions.RECEIVE_SMS)
 
-    fun inboxSource(): SmsSource = ContentResolverInboxSource(context.contentResolver, ::canReadInbox)
+    fun inboxSource(after: InboxCursor? = null): SmsSource {
+        return ContentResolverInboxSource(context.contentResolver, ::canReadInbox, after)
+    }
 
     private fun granted(permission: String): Boolean {
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED

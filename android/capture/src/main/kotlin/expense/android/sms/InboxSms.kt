@@ -28,6 +28,23 @@ object InboxQuery {
     const val sortOrder: String = "$DATE ASC, $ID ASC"
 }
 
+/**
+ * Last inbox row that was stored with a provider id.
+ * The next sync reads only rows that sort after this pair.
+ */
+data class InboxCursor(
+    val receivedAtMillis: Long,
+    val providerMessageId: Long,
+) {
+    fun selection(): String = "(${InboxQuery.DATE} > ?) OR (${InboxQuery.DATE} = ? AND ${InboxQuery.ID} > ?)"
+
+    fun args(): Array<String> = arrayOf(
+        receivedAtMillis.toString(),
+        receivedAtMillis.toString(),
+        providerMessageId.toString(),
+    )
+}
+
 object InboxSmsConverter {
     fun convert(row: InboxSmsRow): InboundSms {
         return InboundSms(

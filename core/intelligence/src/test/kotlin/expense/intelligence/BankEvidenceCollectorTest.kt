@@ -132,8 +132,8 @@ class BankEvidenceCollectorTest {
         )
         val prose = intelligence.assess(SmsText("PIPEBANK", purchase))
         assertEquals(DiscoveryStatus.KNOWN, prose.discovery.status)
-        assertEquals("pipebank", prose.discovery.verifiedInstitution?.institutionId)
-        assertTrue(prose.postable)
+        assertNull(prose.discovery.verifiedInstitution)
+        assertFalse(prose.postable)
 
         val structured = intelligence.assess(SmsText("PIPEBANK", "TB|purchase|EGP|10.00|Shop"))
         val institution = structured.discovery.candidates.single()

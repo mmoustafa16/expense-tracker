@@ -28,8 +28,10 @@ import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
+import expense.ingest.ExplicitAccount
 import expense.ingest.PipelineMetadata
 import expense.ingest.StoredInterpretation
+import expense.intelligence.senderInstitutionId
 import expense.parse.Extraction
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
@@ -848,6 +850,73 @@ class SqlDelightLedgerRepository(
         val next = transform(load())
         save(next)
         return next
+    }
+
+    fun inboxHighWater(): Pair<Long, Long>? {
+        val row = database.expenseQueries.selectInboxHighWater().executeAsOneOrNull() ?: return null
+        val id = row.providerMessageId?.toLongOrNull() ?: return null
+        return row.receivedAt to id
+    }
+
+    fun learnedSenders(): List<String> = database.expenseQueries.selectLearnedSenders().executeAsList()
+
+    fun rememberSenders(senders: Set<String>) {
+        if (senders.isEmpty()) return
+        val queries = database.expenseQueries
+        senders.forEach { sender ->
+            queries.insertLearnedSender(
+                sender = sender,
+                institutionId = senderInstitutionId(sender),
+                displayName = sender,
+            )
+        }
+    }
+
+    /**
+     * Fills a missing account only when the stored SMS states a card or account
+     * last-4. Rows that do not state one stay unassociated. One page is one
+     * transaction. Returns how many transactions were linked.
+     */
+    fun relinkUnassigned(
+        pageSize: Int,
+        identify: (String) -> ExplicitAccount?,
+        newAccountId: () -> String,
+    ): Int {
+        require(pageSize > 0)
+        var offset = 0
+        var linked = 0
+        while (true) {
+            val page = database.expenseQueries
+                .selectUnlinkedTransactions(pageSize.toLong(), offset.toLong())
+                .executeAsList()
+            if (page.isEmpty()) return linked
+            var linkedHere = 0
+            database.transaction {
+                for (row in page) {
+                    val body = row.body ?: continue
+                    val account = identify(body) ?: continue
+                    val existing = database.expenseQueries.selectAccountId(
+                        institutionId = row.institutionId,
+                        kind = account.kind.name,
+                        mask = account.mask,
+                    ).executeAsOneOrNull()
+                    val accountId = existing ?: newAccountId().also { id ->
+                        database.expenseQueries.insertAccount(
+                            id = id,
+                            institutionId = row.institutionId,
+                            kind = account.kind.name,
+                            mask = account.mask,
+                            currency = row.currency,
+                            displayName = "",
+                        )
+                    }
+                    database.expenseQueries.updateTransactionAccount(accountId = accountId, id = row.transactionId)
+                    linkedHere++
+                }
+            }
+            linked += linkedHere
+            offset += page.size - linkedHere
+        }
     }
 
     private fun customCategories(): List<Category> {

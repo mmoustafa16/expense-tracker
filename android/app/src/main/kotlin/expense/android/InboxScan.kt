@@ -11,25 +11,25 @@ enum class InboxScanPhase {
 data class InboxScan(
     val phase: InboxScanPhase = InboxScanPhase.IDLE,
     val tally: IngestTally = IngestTally(),
+    val generation: Int = 0,
 )
 
 /**
- * One inbox scan at a time. A second request while a scan is running, or after
- * it has finished in this process, does not start another scan.
+ * One inbox sync at a time. A finished sync can run again so messages that
+ * arrived after the previous cursor are ingested. A second call while a sync
+ * is still running does not start another one.
  */
 class InboxScanGate {
     private var active: Boolean = false
-    private var finished: Boolean = false
 
     fun tryStart(): Boolean {
-        if (active || finished) return false
+        if (active) return false
         active = true
         return true
     }
 
     fun finish() {
         active = false
-        finished = true
     }
 
     fun abandon() {

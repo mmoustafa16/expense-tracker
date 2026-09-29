@@ -109,7 +109,7 @@ fun ExpenseApp(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(scan.phase, scan.tally.scanned) {
+    LaunchedEffect(scan.phase, scan.generation) {
         if (scan.phase == InboxScanPhase.RUNNING || scan.phase == InboxScanPhase.FINISHED) {
             refresh.value = refresh.value + 1
         }

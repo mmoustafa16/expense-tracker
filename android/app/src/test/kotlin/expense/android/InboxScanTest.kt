@@ -9,12 +9,13 @@ import org.junit.jupiter.api.Test
 
 class InboxScanTest {
     @Test
-    fun `a second request does not start another scan`() {
+    fun `a running sync is exclusive and a finished sync can run again`() {
         val gate = InboxScanGate()
         assertTrue(gate.tryStart())
         assertFalse(gate.tryStart())
         gate.finish()
-        assertFalse(gate.tryStart())
+        assertTrue(gate.tryStart())
+        gate.finish()
     }
 
     @Test
