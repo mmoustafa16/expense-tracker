@@ -31,7 +31,7 @@ class SyntheticUnknownBankTest {
 
     @Test
     fun `a synthetic unknown bank is understood and stays in review until verified`() {
-        assertTrue(InstitutionBootstrap.records.isEmpty())
+        assertTrue(InstitutionBootstrap.records.none { sender in it.senderIds })
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
         val understood = FinancialSmsIntelligence.deterministic().assess(SmsText(sender, body))
         assertEquals(DiscoveryStatus.UNKNOWN, understood.discovery.status)
@@ -64,7 +64,7 @@ class SyntheticUnknownBankTest {
         assertEquals(Money(6420, Currency.EGP), transaction.amount)
         assertEquals("Harbor Cafe", transaction.merchantRaw)
         assertTrue(posted.state.reviewQueue().isEmpty())
-        assertTrue(InstitutionBootstrap.records.isEmpty())
+        assertTrue(InstitutionBootstrap.records.none { sender in it.senderIds })
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
     }
 

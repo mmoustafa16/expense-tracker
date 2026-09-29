@@ -116,7 +116,7 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
     }
 
     private companion object {
-        val balanceCue = Regex("""(?i)(balance|الرصيد)""")
+        val balanceCue = Regex("""(?i)(balance|available\s+limit|الرصيد)""")
         val amountPatterns = listOf(
             AmountPattern(Regex("""(?i)\b(EGP|USD|EUR|GBP|LE)\s+([0-9]+(?:[.,][0-9]+)*)"""), currencyGroup = 1, numberGroup = 2),
             AmountPattern(Regex("""(?i)\b([0-9]+(?:[.,][0-9]+)*)\s+(EGP|USD|EUR|GBP|LE)\b"""), currencyGroup = 2, numberGroup = 1),
@@ -127,7 +127,9 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
             """(?i)(?:\b(?:at|from|by)\b|عند|لدى)\s+([A-Za-z][A-Za-z0-9&'.-]*(?:\s+[A-Za-z][A-Za-z0-9&'.-]*)?)""",
         )
         val merchantStops = setOf("on", "ref", "reference", "available", "balance", "for", "with", "card", "ending")
-        val maskPattern = Regex("""(?i)\b(?:card|account|acct)\s+ending\s+\**(\d{4})\b|\bending\s+(\d{4})\b""")
+        val maskPattern = Regex(
+            """(?i)\b(?:card|account|acct)\s+ending(?:\s+with)?\s+\**(\d{4})\b|\bending(?:\s+with)?\s+\**(\d{4})\b|\b(?:card|account|acct)\s*#+\s*(\d{4})\b""",
+        )
         val referencePattern = Regex("""(?i)\bref(?:erence)?[:\s#-]+([A-Za-z0-9]{2,})""")
         val occurredPattern = Regex("""\b(\d{2}/\d{2}/\d{4})(?:\s+(\d{2}:\d{2}))?\b""")
         val civilTime: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")

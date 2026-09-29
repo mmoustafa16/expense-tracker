@@ -3,7 +3,11 @@ package expense.ingest
 import expense.intelligence.FinancialSmsIntelligence
 import expense.intelligence.MoneyDirection
 import expense.intelligence.SmsText
+import expense.money.Currency
+import expense.money.Money
+import expense.parse.AccountKind
 import expense.parse.ParseStatus
+import expense.parse.TransactionKind
 import expense.sms.InboundSms
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -28,12 +32,12 @@ class AccountTransferReviewTest {
         )
         val pipeline = IngestPipeline(ids = TransferIds())
         bodies.forEachIndexed { index, body ->
-            val result = pipeline.ingest(message("CIB", body, "t$index"))
+            val result = pipeline.ingest(message("UNVERIFIED", body, "t$index"))
             assertEquals(ParseStatus.UNSUPPORTED, result.status, body)
             assertEquals(1, result.state.reviewQueue().size, body)
             assertEquals(body, result.state.messages.single().body, body)
             assertTrue(result.state.transactions.isEmpty(), body)
-            val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("CIB", body))
+            val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("UNVERIFIED", body))
             assertEquals("transfer_out", decision.classification.semantics?.intent, body)
             assertTrue(decision.classification.semantics!!.transactionCompleted, body)
             assertTrue(decision.classification.semantics!!.moneyMovement, body)
@@ -45,11 +49,11 @@ class AccountTransferReviewTest {
     @Test
     fun `an account credit from a transfer stays in review for an unknown sender`() {
         val body = "Your account was credited with amount EGP 120.00CR on 02 APR 2024 from a transfer by another account."
-        val result = IngestPipeline(ids = TransferIds()).ingest(message("CIB", body, "credit"))
+        val result = IngestPipeline(ids = TransferIds()).ingest(message("UNVERIFIED", body, "credit"))
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
         assertEquals(1, result.state.reviewQueue().size)
         assertTrue(result.state.transactions.isEmpty())
-        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("CIB", body))
+        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("UNVERIFIED", body))
         assertEquals("transfer_in", decision.classification.semantics?.intent)
         assertEquals(MoneyDirection.CREDIT, decision.classification.semantics!!.direction)
     }
@@ -57,13 +61,44 @@ class AccountTransferReviewTest {
     @Test
     fun `an account purchase that also quotes available balance stays in review`() {
         val body = "Your account ending with ****2219 is debited with amount EGP 54.00DR on 04 APR 2024 for a purchase at the market."
-        val result = IngestPipeline(ids = TransferIds()).ingest(message("CIB", body, "purchase"))
+        val result = IngestPipeline(ids = TransferIds()).ingest(message("UNVERIFIED", body, "purchase"))
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
         assertEquals(1, result.state.reviewQueue().size)
         assertTrue(result.state.transactions.isEmpty())
-        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("CIB", body))
+        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("UNVERIFIED", body))
         assertEquals("card_purchase", decision.classification.semantics?.intent)
         assertEquals(MoneyDirection.DEBIT, decision.classification.semantics!!.direction)
+    }
+
+    @Test
+    fun `sender CIB posts a completed transfer and a card charge on separate accounts`() {
+        val card = "Your credit card#0019 was charged for EGP 31.89 at Talabat on 30/03/24 at 20:19. Available limit is 137968.11."
+        val pipeline = IngestPipeline(ids = TransferIds())
+        val transfer = pipeline.ingest(message("CIB", cibTransfer, "transfer"))
+        assertEquals(ParseStatus.PARSED, transfer.status)
+        assertTrue(transfer.posted)
+        assertTrue(transfer.state.reviewQueue().isEmpty())
+        val transferTx = transfer.state.transactions.single()
+        assertEquals("cib", transferTx.institutionId)
+        assertEquals(TransactionKind.TRANSFER_OUT, transferTx.kind)
+        assertEquals(Money(3189, Currency.EGP), transferTx.amount)
+        val transferAccount = transfer.state.accounts.single()
+        assertEquals("cib", transferAccount.institutionId)
+        assertEquals(AccountKind.ACCOUNT, transferAccount.kind)
+        assertEquals("9438", transferAccount.mask)
+
+        val purchase = pipeline.ingest(message("CIB", card, "card"), transfer.state)
+        assertEquals(ParseStatus.PARSED, purchase.status)
+        assertTrue(purchase.posted)
+        assertTrue(purchase.state.reviewQueue().isEmpty())
+        val purchaseTx = purchase.state.transactions.single { it.kind == TransactionKind.PURCHASE }
+        assertEquals("cib", purchaseTx.institutionId)
+        assertEquals(Money(3189, Currency.EGP), purchaseTx.amount)
+        assertEquals("Talabat", purchaseTx.merchantRaw)
+        val cardAccount = purchase.state.accounts.single { it.kind == AccountKind.CREDIT_CARD }
+        assertEquals("cib", cardAccount.institutionId)
+        assertEquals("0019", cardAccount.mask)
+        assertEquals(setOf("9438", "0019"), purchase.state.accounts.map { it.mask }.toSet())
     }
 
     @Test

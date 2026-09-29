@@ -50,7 +50,7 @@ class KnownSenderServiceMessageTest {
         assertTrue(state.messages.all { it.body == null })
         assertTrue(state.reviewQueue().isEmpty())
         assertTrue(state.transactions.isEmpty())
-        assertTrue(InstitutionBootstrap.records.isEmpty())
+        assertTrue(InstitutionBootstrap.records.none { "Vodafone" in it.senderIds || "VodafoneCash" in it.senderIds })
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
 
         val known = intelligence.assess(SmsText("Vodafone", "Your mobile balance is EGP 15.50"))

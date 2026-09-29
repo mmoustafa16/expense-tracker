@@ -17,13 +17,28 @@ class FinancialSmsIntelligenceTest {
 
     @Test
     fun `an unregistered sender stays unknown`() {
-        assertTrue(InstitutionBootstrap.records.isEmpty())
-        listOf("CIB", "ALEXBANK", "Vodafone", "SOMEBANK").forEach { sender ->
+        listOf("ALEXBANK", "Vodafone", "VodafoneCash", "SOMEBANK").forEach { sender ->
             val decision = intelligence.assess(SmsText(sender, "Charged EGP 10.00 at Shop"))
             assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status, sender)
-            assertTrue(decision.discovery.candidates.isEmpty())
-            assertNull(decision.discovery.verifiedInstitution)
+            assertTrue(decision.discovery.candidates.isEmpty(), sender)
+            assertNull(decision.discovery.verifiedInstitution, sender)
+            assertFalse(decision.postable, sender)
         }
+    }
+
+    @Test
+    fun `the device sender CIB is the only verified institution and can post`() {
+        assertEquals(listOf("CIB"), InstitutionBootstrap.records.flatMap { it.senderIds })
+        val decision = intelligence.assess(SmsText("CIB", "Charged EGP 10.00 at Shop"))
+        assertEquals(DiscoveryStatus.KNOWN, decision.discovery.status)
+        assertEquals("cib", decision.discovery.verifiedInstitution?.institutionId)
+        assertEquals("CIB", decision.discovery.verifiedInstitution?.displayName)
+        assertTrue(decision.discovery.verifiedInstitution!!.verified)
+        assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
+        assertTrue(decision.postable)
+        val stranger = intelligence.assess(SmsText("CIB-EG", "Charged EGP 10.00 at Shop"))
+        assertEquals(DiscoveryStatus.UNKNOWN, stranger.discovery.status)
+        assertFalse(stranger.postable)
     }
 
     @Test

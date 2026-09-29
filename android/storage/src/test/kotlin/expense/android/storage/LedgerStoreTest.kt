@@ -291,7 +291,7 @@ class LedgerRepositoryTest {
     }
 
     @Test
-    fun `a stored account transfer from an unknown sender is rewritten and stays in review`() {
+    fun `a stored CIB transfer is posted when the sender is verified`() {
         val repository = memoryRepository()
         val body = "Your account ending with ******9438 is debited with amount EGP 31.89DR on 31 MAR 2024 with transfer to another account."
         val received = Instant.parse("2026-05-02T00:00:00Z")
@@ -317,11 +317,13 @@ class LedgerRepositoryTest {
         assertEquals(1, reclassify(repository, pageSize = 1))
         val loaded = repository.load()
         val attempt = loaded.attempts.single()
-        assertEquals(ParseStatus.UNSUPPORTED, attempt.status)
+        assertEquals(ParseStatus.PARSED, attempt.status)
         assertEquals(PipelineMetadata.VERSION, attempt.pipelineVersion)
         assertEquals(body, loaded.messages.single().body)
-        assertTrue(loaded.transactions.isEmpty())
-        assertEquals(1, repository.reviewWindow(0, 20).total)
+        assertEquals(TransactionKind.TRANSFER_OUT, loaded.transactions.single().kind)
+        assertEquals("cib", loaded.transactions.single().institutionId)
+        assertEquals("9438", loaded.accounts.single().mask)
+        assertEquals(0, repository.reviewWindow(0, 20).total)
         assertEquals(0, reclassify(repository, pageSize = 1))
     }
 
