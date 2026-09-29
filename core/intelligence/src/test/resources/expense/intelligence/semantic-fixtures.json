@@ -72,6 +72,24 @@
     "text": "The retailer collected the amount through بطاقتك بنجاح"
   },
   {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your account ending with ****2219 is debited with amount EGP 54.00DR on 04 APR 2024 for a purchase at the market."
+  },
+  {
+    "name": "card_purchase",
+    "transactionClass": "CARD_PURCHASE",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The account was debited for a purchase at the grocery. Available balance is shown afterwards."
+  },
+  {
     "name": "failed_card_purchase",
     "transactionClass": "OTHER_NON_TRANSACTION",
     "transactionCompleted": false,
@@ -214,6 +232,60 @@
     "direction": "DEBIT",
     "ambiguous": false,
     "text": "A completed remittance ذهب إلى أخيك من المحفظة"
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your account ending with ******9438 is debited with amount EGP 31.89DR on 31 MAR 2024 with transfer to another account."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "The account was debited because a transfer to another account completed on 31 March."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Funds left the account through a completed transfer. The debit has posted."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "A completed transfer to another account debited the account. Available balance afterwards is EGP 640.00."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "Your account was debited EGP 75.00 for a transfer to another account. Available limit remains EGP 4,000.00."
+  },
+  {
+    "name": "transfer_out",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "DEBIT",
+    "ambiguous": false,
+    "text": "خُصم من حسابك مبلغ لأن تحويلاً مكتملاً خرج إلى حساب آخر."
   },
   {
     "name": "failed_transfer",
@@ -511,6 +583,24 @@
     "direction": null,
     "ambiguous": false,
     "text": "No activity, المتاح 15.50 جنيه فقط كإشعار"
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Your account ending with ****1008 has available balance EGP 500.00. No transfer or debit took place."
+  },
+  {
+    "name": "balance",
+    "transactionClass": "BALANCE_NOTIFICATION",
+    "transactionCompleted": false,
+    "moneyMovement": false,
+    "direction": null,
+    "ambiguous": false,
+    "text": "Available balance is EGP 1,400.00. This notice does not debit the account and does not send a transfer."
   },
   {
     "name": "promotion",
@@ -907,6 +997,24 @@
     "direction": "CREDIT",
     "ambiguous": false,
     "text": "Incoming value from Nora وصل إلى جانبك"
+  },
+  {
+    "name": "transfer_in",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "Your account was credited with amount EGP 120.00CR on 02 APR 2024 from a transfer by another account."
+  },
+  {
+    "name": "transfer_in",
+    "transactionClass": "TRANSFER",
+    "transactionCompleted": true,
+    "moneyMovement": true,
+    "direction": "CREDIT",
+    "ambiguous": false,
+    "text": "An incoming transfer from another account has credited your account. Available balance is EGP 2,040.00."
   },
   {
     "name": "cash_withdrawal",

@@ -59,6 +59,71 @@ class SemanticClassificationTest {
     }
 
     @Test
+    fun `a completed account debit for a transfer is not a balance notice`() {
+        val transfer = classifier.classify(
+            SmsText(
+                "CIB",
+                "Your account ending with ******9438 is debited with amount EGP 31.89DR on 31 MAR 2024 with transfer to another account.",
+            ),
+        )
+        assertEquals("transfer_out", transfer.semantics?.intent)
+        assertTrue(transfer.semantics!!.transactionCompleted)
+        assertTrue(transfer.semantics!!.moneyMovement)
+        assertEquals(MoneyDirection.DEBIT, transfer.semantics!!.direction)
+        assertEquals(TransactionClass.TRANSFER, transfer.type)
+        assertTrue(transfer.confidence >= 80)
+
+        val paraphrases = listOf(
+            "The account was debited because a transfer to another account completed on 31 March.",
+            "Funds left the account through a completed transfer. The debit has posted.",
+            "A completed transfer to another account debited the account. Available balance afterwards is EGP 640.00.",
+            "Your account was debited EGP 75.00 for a transfer to another account. Available limit remains EGP 4,000.00.",
+            "خُصم من حسابك مبلغ لأن تحويلاً مكتملاً خرج إلى حساب آخر.",
+        )
+        paraphrases.forEach { body ->
+            val classified = classifier.classify(SmsText("UNKNOWN", body))
+            assertEquals("transfer_out", classified.semantics?.intent, body)
+            assertTrue(classified.semantics!!.transactionCompleted, body)
+            assertTrue(classified.semantics!!.moneyMovement, body)
+            assertEquals(MoneyDirection.DEBIT, classified.semantics!!.direction, body)
+            assertTrue(classified.confidence >= 80, body)
+        }
+
+        val credit = classifier.classify(
+            SmsText(
+                "CIB",
+                "Your account was credited with amount EGP 120.00CR on 02 APR 2024 from a transfer by another account.",
+            ),
+        )
+        assertEquals("transfer_in", credit.semantics?.intent)
+        assertEquals(MoneyDirection.CREDIT, credit.semantics!!.direction)
+        assertTrue(credit.semantics!!.transactionCompleted)
+        assertTrue(credit.semantics!!.moneyMovement)
+
+        val purchase = classifier.classify(
+            SmsText(
+                "CIB",
+                "Your account ending with ****2219 is debited with amount EGP 54.00DR on 04 APR 2024 for a purchase at the market.",
+            ),
+        )
+        assertEquals("card_purchase", purchase.semantics?.intent)
+        assertEquals(MoneyDirection.DEBIT, purchase.semantics!!.direction)
+        assertTrue(purchase.semantics!!.transactionCompleted)
+        assertTrue(purchase.semantics!!.moneyMovement)
+
+        val balance = classifier.classify(
+            SmsText(
+                "CIB",
+                "Your account ending with ****1008 has available balance EGP 500.00. No transfer or debit took place.",
+            ),
+        )
+        assertEquals("balance", balance.semantics?.intent)
+        assertFalse(balance.semantics!!.transactionCompleted)
+        assertFalse(balance.semantics!!.moneyMovement)
+        assertFalse(balance.type.isLedgerCandidate())
+    }
+
+    @Test
     fun `an arabic vodafone renewal attempt is not a completed money movement`() {
         val body = "عفواً، رصيدك غير كافٍ لتجديد باقة Plus 6000. برجاء شحن 65 جنيه"
         val fromCarrier = classifier.classify(SmsText("Vodafone", body))

@@ -1,8 +1,8 @@
 """Arabic and mixed Arabic/English paraphrases for the intent head.
 
 These are training and held-out texts, not runtime rules. The held-out
-Vodafone renewal is the real-device regression message and must stay out
-of the training list.
+Vodafone renewal and the held-out CIB account-debit wording must stay out
+of the training list. Nearby paraphrases teach the same meaning.
 """
 
 DEVICE_RENEWAL = "عفواً، رصيدك غير كافٍ لتجديد باقة Plus 6000. برجاء شحن 65 جنيه"
@@ -17,6 +17,12 @@ EXTRA_TRAIN = {
         "عملية البيع بالبطاقة في الصيدلية اكتملت",
         "Your card sale اكتملت في المقهى وخرج المبلغ",
         "تم دفع ثمن المشتريات بالبطاقة لدى المطعم",
+        "Your account ending with ****6620 is debited with amount EGP 44.00DR on 03 FEB 2025 for a purchase at the pharmacy.",
+        "The account was debited for a completed purchase at the grocery. Available balance is now EGP 700.00.",
+        "A card purchase at the cafe debited the account. Available limit afterwards is 9500.",
+        "Your account was debited because the bookstore purchase completed. The remaining balance is quoted after the sale.",
+        "تم خصم ثمن الشراء من الحساب بعد اكتمال عملية البطاقة في المتجر. الرصيد المتاح مذكور بعد العملية.",
+        "The shop purchase finished and the account was debited. Available balance remains listed underneath.",
     ],
     "failed_card_purchase": [
         "رفض البنك محاولة الشراء بالبطاقة ولم يخرج شيء",
@@ -46,6 +52,20 @@ EXTRA_TRAIN = {
         "أُرسلت الأموال من محفظتك نحو المستلم وقلّ ما تبقى لديك",
         "You sent جنيه from your wallet إلى سارة and your side decreased",
         "التحويل خرج من محفظتك إلى المستلم بعد أن أرسلته",
+        "Your account ending with ****4412 is debited with amount EGP 250.00DR on 12 JAN 2025 with transfer to another account.",
+        "The account was debited once the outward transfer to the other account had completed.",
+        "A completed transfer moved funds out, and the source account was debited for that amount.",
+        "Money left this account because a transfer to another account finished.",
+        "We debited the account after the transfer reached the other account.",
+        "حسابك خُصم منه المبلغ لأن التحويل إلى حساب آخر اكتمل.",
+        "تم خصم القيمة من الحساب بعد أن وصل التحويل إلى الحساب الآخر.",
+        "التحويل الصادر اكتمل فنُقص الحساب بالمبلغ الذي غادر.",
+        "Your account was debited USD 40.00 for a completed transfer to another account. Available balance is USD 800.00.",
+        "Account 7781 was debited after the transfer to the other account posted. Remaining balance EGP 640.00.",
+        "A completed inter-account transfer debited the source account. The available balance afterwards is 2200 pounds.",
+        "The outward transfer posted and the account balance fell because the funds had left.",
+        "Your account ending in 9021 was debited for a transfer that another account received.",
+        "Debit posted on the account: the transfer to the destination account is complete. Available limit is still shown below.",
     ],
     "transfer_in": [
         "وصلك تحويل من نورا إلى المحفظة",
@@ -58,6 +78,13 @@ EXTRA_TRAIN = {
         "ابن العم أرسل مبلغاً وقد استلمته المحفظة",
         "أموال أحد الأقارب وصلت إلى جانبك الآن",
         "A sum sent by a relative has landed in your wallet.",
+        "Your account ending with ****3304 is credited with amount EGP 200.00CR on 02 FEB 2025 from a transfer by another account.",
+        "A transfer from another account credited this account. Available balance is now EGP 1,500.00.",
+        "The account was credited because an incoming transfer from another account completed.",
+        "Funds arrived from another account, so this account was credited.",
+        "تم إضافة المبلغ إلى الحساب لأن تحويلاً وارداً من حساب آخر اكتمل.",
+        "حسابك أُضيف إليه مبلغ بعد اكتمال تحويل من حساب آخر. الرصيد المتاح مذكور للعلم.",
+        "Incoming transfer posted. Your account was credited and the available balance increased.",
     ],
     "failed_transfer": [
         "تعذر إرسال المبلغ إلى عمر ولم تتحرك القيمة",
@@ -183,6 +210,18 @@ EXTRA_TRAIN = {
         "لقطة للمبلغ الجالس في الحساب دون رسوم",
         "ثمانون جنيهاً هي المتاح الآن وهذا إشعار",
         "No activity, المتاح للعلم فقط وليس عرضاً",
+        "Your account ending with ****5521 has available balance EGP 300.00. Nothing was debited and no transfer occurred.",
+        "Account balance for the account ending 8830 is EGP 90.00. This is only a balance notice.",
+        "Balance enquiry for account ****1904. No debit occurred and no transfer was sent.",
+        "الرصيد المتاح للحساب إشعار فقط. لم يحدث خصم ولم يُرسل تحويل.",
+        "Available balance on the account is unchanged. This note does not debit the account.",
+        "The account ending 2290 still holds the same sum. Nothing was transferred and nothing was spent.",
+        "Your account ending with ****7712 has available balance EGP 80.00. No transfer or debit took place.",
+        "Available balance for the account ending ****4188 is EGP 60. Nothing left the account. No transfer was made.",
+        "This is only the balance of the account ending 6155. A transfer did not happen and the account was not debited.",
+        "Balance snapshot for account ****2844: EGP 15.50. The account was not debited and no money was transferred.",
+        "Your account ending with ****9090 shows EGP 42.00 available. There was no debit and there was no transfer.",
+        "رصيد الحساب المنتهي بـ 7712 إشعار فقط. لم يُخصم شيء ولم يخرج تحويل.",
     ],
     "promotion": [
         "عرض خاص لهذا الأسبوع وليس إيصالاً",
@@ -231,6 +270,8 @@ EXTRA_HELD = {
         "اكتملت حركة البطاقة في المكتبة مقابل 18 جنيهاً",
         "المتجر حصل 90 درهماً عبر بطاقتك المرتبطة",
         "The retailer collected the amount through بطاقتك بنجاح",
+        "Your account ending with ****2219 is debited with amount EGP 54.00DR on 04 APR 2024 for a purchase at the market.",
+        "The account was debited for a purchase at the grocery. Available balance is shown afterwards.",
     ],
     "failed_card_purchase": [
         "حاول المتجر أخذ المبلغ من البطاقة لكن المحاولة رُفضت",
@@ -243,6 +284,12 @@ EXTRA_HELD = {
         "أموال المحفظة انتقلت بنجاح إلى صاحب الحساب كريم",
         "التحويل بين الأفراد خرج من رصيدك ووصل هناء",
         "A completed remittance ذهب إلى أخيك من المحفظة",
+        "Your account ending with ******9438 is debited with amount EGP 31.89DR on 31 MAR 2024 with transfer to another account.",
+        "The account was debited because a transfer to another account completed on 31 March.",
+        "Funds left the account through a completed transfer. The debit has posted.",
+        "A completed transfer to another account debited the account. Available balance afterwards is EGP 640.00.",
+        "Your account was debited EGP 75.00 for a transfer to another account. Available limit remains EGP 4,000.00.",
+        "خُصم من حسابك مبلغ لأن تحويلاً مكتملاً خرج إلى حساب آخر.",
     ],
     "failed_transfer": [
         "المحفظة لم تستطع إرسال المال إلى عمر لأن المحاولة لم تنته",
@@ -268,6 +315,8 @@ EXTRA_HELD = {
         "المتاح الآن: 1250 جنيهاً دون حركة",
         "لقطة للمبلغ الموجود في الحساب: ثمانون جنيهاً",
         "No activity, المتاح 15.50 جنيه فقط كإشعار",
+        "Your account ending with ****1008 has available balance EGP 500.00. No transfer or debit took place.",
+        "Available balance is EGP 1,400.00. This notice does not debit the account and does not send a transfer.",
     ],
     "promotion": [
         "هذا الأسبوع فقط استمتع بعرض خاص عند الزيارة",
@@ -302,6 +351,8 @@ EXTRA_HELD = {
     "transfer_in": [
         "مبلغ من ابن عمك وصل الآن",
         "Incoming value from Nora وصل إلى جانبك",
+        "Your account was credited with amount EGP 120.00CR on 02 APR 2024 from a transfer by another account.",
+        "An incoming transfer from another account has credited your account. Available balance is EGP 2,040.00.",
     ],
     "cash_withdrawal": [
         "خرجت أوراق نقدية من الماكينة إليك",
