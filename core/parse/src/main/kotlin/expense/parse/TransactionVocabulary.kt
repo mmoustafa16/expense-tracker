@@ -1,19 +1,5 @@
 package expense.parse
 
-enum class TransactionKind {
-    PURCHASE,
-    REFUND,
-    REVERSAL,
-    FAILED,
-    TRANSFER_IN,
-    TRANSFER_OUT,
-    CASH_WITHDRAWAL,
-    INSTALLMENT,
-    FEE,
-    INCOME,
-    UNKNOWN,
-}
-
 enum class Direction {
     DEBIT,
     CREDIT,
@@ -28,4 +14,8 @@ enum class AccountKind {
     MEEZA,
     CARD,
     UNSPECIFIED,
+    ;
+
+    /** True when charges on this instrument are a debt that a payment settles. */
+    fun isCredit(): Boolean = this == CREDIT_CARD
 }

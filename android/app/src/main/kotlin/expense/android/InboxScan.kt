@@ -42,32 +42,44 @@ data class ScanMetric(
     val value: String,
 )
 
+/**
+ * Names each count by the population it measures.
+ *
+ * Every label here states what was counted. An SMS this device kept is not a
+ * financial event, a financial event is not a ledger row, and a ledger row is
+ * not necessarily spending, so the screen shows four numbers that are allowed to
+ * differ instead of one that has to be wrong.
+ */
 object InboxScanText {
     fun title(running: Boolean): String = if (running) "Scanning the inbox" else "Last inbox scan"
 
     fun metrics(tally: IngestTally): List<ScanMetric> {
         return listOf(
-            ScanMetric("Scanned", count(tally.scanned)),
-            ScanMetric("Financial", count(tally.financial)),
-            ScanMetric("Needs review", count(tally.unsupported)),
+            ScanMetric("SMS scanned", count(tally.smsScanned)),
+            ScanMetric("Financial events", count(tally.financialEvents)),
+            ScanMetric("Posted", count(tally.postedTransactions)),
+            ScanMetric("Needs review", count(tally.reviewItems)),
         )
     }
 
     fun count(value: Int): String = "%,d".format(java.util.Locale.US, value)
 
     fun detail(tally: IngestTally): String {
-        return "Matched ${count(tally.matchedProfile)} · Parsed ${count(tally.parsed)} · Posted ${count(tally.posted)}."
+        return "Spend transactions ${count(tally.spendTransactions)} · " +
+            "Financial events not in the ledger ${count(tally.excludedFinancialEvents)}."
     }
 
     fun progress(tally: IngestTally, running: Boolean): String {
         val head = if (running) "Scanning the inbox." else "Inbox scan finished."
-        return "$head Scanned ${tally.scanned}. Financial ${tally.financial}. " +
-            "Matched ${tally.matchedProfile}. Unsupported ${tally.unsupported}. " +
-            "Parsed ${tally.parsed}. Posted ${tally.posted}."
+        return "$head SMS scanned ${tally.smsScanned}. Financial events ${tally.financialEvents}. " +
+            "Posted transactions ${tally.postedTransactions}. Needs review ${tally.reviewItems}. " +
+            "Spend transactions ${tally.spendTransactions}. " +
+            "Financial events not in the ledger ${tally.excludedFinancialEvents}."
     }
 
     fun unmatchedNote(tally: IngestTally): String? {
-        if (tally.unsupported == 0 || tally.posted > 0 || tally.matchedProfile > 0) return null
-        return "Financial messages with no verified bank profile stay in Review. They are not added to the ledger."
+        if (tally.reviewItems == 0 || tally.postedTransactions > 0) return null
+        return "Financial messages from a sender this device has not verified stay in Review. " +
+            "They are not added to the ledger."
     }
 }

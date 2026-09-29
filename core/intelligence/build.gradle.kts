@@ -7,6 +7,7 @@ kotlin {
 }
 
 dependencies {
+    api(project(":core:parse"))
     implementation(project(":core:money"))
     implementation(libs.org.json)
     testImplementation(libs.junit.jupiter)

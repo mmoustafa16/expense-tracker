@@ -13,6 +13,9 @@ enum class EvidenceKind {
     SENDER_ALIAS,
     SENDER_SHAPE,
     MESSAGE_STRUCTURE,
+
+    /** Aggregate counts observed from one sender. Never message text. */
+    SENDER_HISTORY,
 }
 
 /**
@@ -41,19 +44,29 @@ enum class SenderAddressShape {
     }
 }
 
-/** Address shape only. This does not read the message body. */
+/**
+ * Address shape only. This does not read the message body.
+ *
+ * Operators hand out alphanumeric sender ids containing spaces, dots, and
+ * ampersands as readily as bare tokens, so an address like `SAIB Bank` is the
+ * same kind of channel as `SAIB`. Treating the space as unrecognizable is what
+ * made such senders unidentifiable, and nothing about the separator changes who
+ * may post: that is still decided by accumulated evidence.
+ */
 fun senderAddressShape(sender: String): SenderAddressShape {
     val trimmed = sender.trim()
     if (trimmed.isEmpty()) return SenderAddressShape.BLANK
+    val digitsOnly = trimmed.all { it.isDigit() || it == '+' }
     return when {
-        trimmed.all { it.isDigit() } && trimmed.length <= SHORT_CODE_LENGTH -> SenderAddressShape.SHORT_CODE
-        trimmed.all { it.isDigit() } -> SenderAddressShape.LONG_NUMBER
-        trimmed.all { it.isLetterOrDigit() || it == '-' } -> SenderAddressShape.ALPHANUMERIC_ID
+        digitsOnly && trimmed.length <= SHORT_CODE_LENGTH -> SenderAddressShape.SHORT_CODE
+        digitsOnly -> SenderAddressShape.LONG_NUMBER
+        trimmed.all { it.isLetterOrDigit() || it in ALPHANUMERIC_PUNCTUATION } -> SenderAddressShape.ALPHANUMERIC_ID
         else -> SenderAddressShape.OTHER
     }
 }
 
 private const val SHORT_CODE_LENGTH: Int = 6
+private val ALPHANUMERIC_PUNCTUATION: Set<Char> = setOf('-', '_', '.', '&', ' ', '\'')
 
 /**
  * Sender-address and message-structure observations.

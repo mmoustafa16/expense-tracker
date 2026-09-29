@@ -16,7 +16,7 @@ import expense.merchants.AliasType
 import expense.merchants.MerchantAlias
 import expense.merchants.MerchantDirectory
 import expense.merchants.MerchantKey
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 
 /**
  * Reapplies user corrections onto projected rows.
@@ -54,13 +54,17 @@ internal object CorrectionOverlay {
                         rememberCategory(merchantId, canonical, rules, ids)
                     }
                 }
+                // The stored value is a FinancialEventType name. A correction
+                // written by an older build no longer parses and is skipped.
                 CorrectionField.KIND -> {
-                    val kind = correction.updatedValue?.let { value ->
-                        runCatching { TransactionKind.valueOf(value) }.getOrNull()
+                    val eventType = correction.updatedValue?.let { value ->
+                        runCatching { FinancialEventType.valueOf(value) }.getOrNull()
                     } ?: continue
+                    val spendEffect = eventType.defaultSpendEffect()
                     tx = tx.copy(
-                        kind = kind,
-                        includeInSpend = SpendPolicy.include(kind, tx.status),
+                        eventType = eventType,
+                        spendEffect = spendEffect,
+                        includeInSpend = SpendPolicy.include(spendEffect, tx.status),
                     )
                 }
                 CorrectionField.AMOUNT -> {

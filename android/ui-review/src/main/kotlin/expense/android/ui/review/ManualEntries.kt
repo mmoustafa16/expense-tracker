@@ -13,14 +13,14 @@ import expense.money.MoneyText
 import expense.parse.AccountKind
 import expense.parse.Direction
 import expense.parse.ParseAttempt
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import java.time.LocalDateTime
 
 data class ManualEntry(
     val amountText: String,
     val currencyCode: String,
     val direction: Direction,
-    val kind: TransactionKind,
+    val eventType: FinancialEventType,
     val occurredCivil: LocalDateTime,
     val merchantRaw: String,
     val categoryId: String?,
@@ -43,7 +43,7 @@ object ManualEntries {
             amountText = candidate?.amount?.let(::amountField).orEmpty(),
             currencyCode = candidate?.amount?.currency?.code ?: Currency.EGP.code,
             direction = candidate?.direction ?: Direction.DEBIT,
-            kind = candidate?.kind ?: TransactionKind.PURCHASE,
+            eventType = candidate?.eventType ?: FinancialEventType.CARD_PURCHASE,
             occurredCivil = candidate?.occurredAt ?: now.withSecond(0).withNano(0),
             merchantRaw = candidate?.merchantRaw.orEmpty(),
             categoryId = null,
@@ -88,7 +88,7 @@ object ManualEntries {
             ManualDraft(
                 amount = amount,
                 direction = entry.direction,
-                kind = entry.kind,
+                eventType = entry.eventType,
                 occurredAt = CairoClock.instantFrom(entry.occurredCivil),
                 occurredCivil = entry.occurredCivil,
                 merchantRaw = entry.merchantRaw.trim().ifEmpty { null },

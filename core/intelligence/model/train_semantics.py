@@ -30,30 +30,32 @@ MAX_TOKENS = 512
 MEDIAN_TOKEN_LENGTH = 6
 UNK_ID = 1
 
-# intent -> ledger class and structured fields. This is the head's label
-# schema, not a text rule.
+# intent -> semantic event type and direction. This is the head's label schema,
+# not a text rule. Whether the event completed and whether money moved are read
+# from the message on the device, so they are deliberately absent here: a label
+# cannot state facts about a message it has not seen.
 LABELS = {
-    "card_purchase": ("CARD_PURCHASE", True, True, "DEBIT", False),
-    "failed_card_purchase": ("OTHER_NON_TRANSACTION", False, False, None, False),
-    "transfer_out": ("TRANSFER", True, True, "DEBIT", False),
-    "transfer_in": ("TRANSFER", True, True, "CREDIT", False),
-    "failed_transfer": ("OTHER_NON_TRANSACTION", False, False, None, False),
-    "cash_withdrawal": ("CASH_WITHDRAWAL", True, True, "DEBIT", False),
-    "refund": ("REFUND", True, True, "CREDIT", False),
-    "reversal": ("REVERSAL", True, True, "CREDIT", False),
-    "fee": ("FEE", True, True, "DEBIT", False),
-    "payment": ("PAYMENT", True, True, "DEBIT", False),
-    "payment_due": ("PAYMENT_DUE", False, False, None, False),
-    "statement": ("STATEMENT", False, False, None, False),
-    "renewal_attempt": ("OTHER_NON_TRANSACTION", False, False, None, False),
-    "renewal_success": ("OTHER_NON_TRANSACTION", True, False, None, False),
-    "service_recharge": ("OTHER_NON_TRANSACTION", True, False, None, False),
-    "balance": ("BALANCE_NOTIFICATION", False, False, None, False),
-    "promotion": ("PROMOTION", False, False, None, False),
-    "otp": ("OTP", False, False, None, False),
-    # Unclear between two ledger movements, so the pipeline keeps it for review.
-    "ambiguous_movement": ("REFUND", False, False, None, True),
-    "other": ("OTHER_NON_TRANSACTION", False, False, None, False),
+    "card_purchase": ("CARD_PURCHASE", "DEBIT", False),
+    "failed_card_purchase": ("FAILED_TRANSACTION", None, False),
+    "transfer_out": ("BANK_TRANSFER", "DEBIT", False),
+    "transfer_in": ("BANK_TRANSFER", "CREDIT", False),
+    "failed_transfer": ("FAILED_TRANSACTION", None, False),
+    "cash_withdrawal": ("CASH_WITHDRAWAL", "DEBIT", False),
+    "refund": ("REFUND", "CREDIT", False),
+    "reversal": ("REVERSAL", "CREDIT", False),
+    "fee": ("FEE", "DEBIT", False),
+    "payment": ("BILL_PAYMENT", "DEBIT", False),
+    "payment_due": ("PAYMENT_DUE", None, False),
+    "statement": ("STATEMENT", None, False),
+    "renewal_attempt": ("PAYMENT_DUE", None, False),
+    "renewal_success": ("BILL_PAYMENT", None, False),
+    "service_recharge": ("OTHER_FINANCIAL", None, False),
+    "balance": ("BALANCE_NOTIFICATION", None, False),
+    "promotion": ("NOT_FINANCIAL", None, False),
+    "otp": ("NOT_FINANCIAL", None, False),
+    # Unclear between two money movements, so the pipeline keeps it for review.
+    "ambiguous_movement": ("OTHER_FINANCIAL", None, True),
+    "other": ("NOT_FINANCIAL", None, False),
 }
 
 
@@ -195,12 +197,10 @@ def check_tokenizer(model: StaticModel, vocab: dict[str, int], samples: list[str
 
 
 def schema(name: str) -> dict:
-    kind, completed, movement, direction, ambiguous = LABELS[name]
+    event_type, direction, ambiguous = LABELS[name]
     return {
         "name": name,
-        "transactionClass": kind,
-        "transactionCompleted": completed,
-        "moneyMovement": movement,
+        "eventType": event_type,
         "direction": direction,
         "ambiguous": ambiguous,
     }
@@ -327,12 +327,12 @@ def main() -> None:
         chosen = names[int(np.argmax(proba))]
         if LABELS[chosen][0] in {
             "CARD_PURCHASE",
-            "TRANSFER",
+            "BANK_TRANSFER",
             "CASH_WITHDRAWAL",
             "REFUND",
             "REVERSAL",
             "FEE",
-            "PAYMENT",
+            "BILL_PAYMENT",
         }:
             raise SystemExit(f"hello {index} -> {chosen}")
     print("paging fixtures stay in the right ledger buckets")

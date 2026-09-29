@@ -39,7 +39,7 @@ import expense.categories.Category
 import expense.ingest.CairoClock
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -251,11 +251,11 @@ fun ManualTransactionScreen(
             onSelected = { onEntry(entry.copy(direction = it)) },
         )
         DropdownField(
-            label = "Kind",
-            options = TransactionKind.entries,
-            selected = entry.kind,
+            label = "Event",
+            options = FinancialEventType.entries.filter { it.canMoveMoney() },
+            selected = entry.eventType,
             optionLabel = { it.name.lowercase().replace('_', ' ') },
-            onSelected = { onEntry(entry.copy(kind = it)) },
+            onSelected = { onEntry(entry.copy(eventType = it)) },
         )
         OutlinedTextField(
             value = whenText,

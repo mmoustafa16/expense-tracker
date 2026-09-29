@@ -183,7 +183,8 @@ class LedgerSession(
 
     fun reclassifyRetained(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE, maxPages: Int = Int.MAX_VALUE): Int {
         return synchronized(lock) {
-            val visited = repositoryLocked().reclassifyRetained(
+            val repository = repositoryLocked()
+            val visited = repository.reclassifyRetained(
                 pageSize = pageSize,
                 maxPages = maxPages,
                 pipelineVersion = PipelineMetadata.VERSION,
@@ -193,6 +194,7 @@ class LedgerSession(
                     pipeline.postStored(state, message, checkNotNull(decision.profile), checkNotNull(decision.extraction))
                 },
             )
+            flushSenderEvidenceLocked(repository)
             invalidateCaches()
             visited
         }
@@ -264,7 +266,7 @@ class LedgerSession(
             synchronized(lock) {
                 val repository = repositoryLocked()
                 repository.append(before, cursor)
-                repository.rememberSenders(pipeline.rememberedInstitutions())
+                flushSenderEvidenceLocked(repository)
                 invalidateCaches()
             }
             working = cursor.withoutMessageBodies()
@@ -279,8 +281,19 @@ class LedgerSession(
         repository.update { state ->
             pipeline.ingestAll(SmsSource { messages }, state)
         }
-        repository.rememberSenders(pipeline.rememberedInstitutions())
+        flushSenderEvidenceLocked(repository)
         invalidateCaches()
+    }
+
+    /**
+     * Writes the sender totals this scan changed. Verification is earned from
+     * aggregate history, so the history has to survive the process that saw it.
+     */
+    private fun flushSenderEvidenceLocked(repository: SqlDelightLedgerRepository) {
+        val changed = pipeline.changedSenderEvidence()
+        if (changed.isEmpty()) return
+        repository.saveSenderEvidence(changed)
+        pipeline.clearChangedSenderEvidence()
     }
 
     private fun repositoryLocked(): SqlDelightLedgerRepository {
@@ -290,28 +303,33 @@ class LedgerSession(
         val database = ExpenseDatabase(driver)
         val created = SqlDelightLedgerRepository(database)
         created.ensureSeed()
-        pipeline.preloadInstitutions(created.learnedSenders())
+        pipeline.preloadSenderEvidence(created.senderEvidence())
         repository = created
         return created
     }
 
-    /** Provider date and id of the newest stored inbox row, when one exists. */
-    fun inboxCursor(): Pair<Long, Long>? = synchronized(lock) {
+    /** Highest provider row id stored, or null before the first sync. */
+    fun inboxWatermark(): Long? = synchronized(lock) {
         if (passphrase == null) return null
-        repositoryLocked().inboxHighWater()
+        repositoryLocked().inboxWatermark()
     }
 
-    /** Links posted transactions whose SMS states a card or account. Returns how many changed. */
-    fun relinkStoredAccounts(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE): Int {
+    /**
+     * Re-reads posted transactions and writes the newer reading onto the rows
+     * that are already there. Returns how many rows changed.
+     */
+    fun reviseStoredTransactions(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE): Int {
         return synchronized(lock) {
             if (passphrase == null) return 0
-            val linked = repositoryLocked().relinkUnassigned(
+            val repository = repositoryLocked()
+            val revised = repository.reviseStoredTransactions(
                 pageSize = pageSize,
-                identify = pipeline::explicitAccount,
+                interpret = pipeline::interpretStored,
                 newAccountId = ids::newId,
             )
-            if (linked > 0) invalidateCaches()
-            linked
+            flushSenderEvidenceLocked(repository)
+            if (revised > 0) invalidateCaches()
+            revised
         }
     }
 }

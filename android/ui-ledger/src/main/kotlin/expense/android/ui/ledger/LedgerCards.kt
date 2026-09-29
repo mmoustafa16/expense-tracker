@@ -7,7 +7,8 @@ import expense.ledger.Transaction
 import expense.money.Currency
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
+import expense.parse.SpendEffect
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -65,7 +66,7 @@ object LedgerCards {
         val merchant = state.merchants.find { it.id == transaction.merchantId }?.displayName
         val title = merchant?.takeIf { it.isNotBlank() }
             ?: transaction.merchantRaw?.takeIf { it.isNotBlank() }
-            ?: kindTitle(transaction.kind)
+            ?: eventTitle(transaction.eventType)
         val account = transaction.accountId?.let { id -> state.accounts.find { it.id == id } }
         return TransactionCard(
             id = transaction.id,
@@ -131,19 +132,35 @@ object LedgerCards {
         return if (time == LocalTime.MIDNIGHT) date else "$date · ${time.format(TIME)}"
     }
 
-    fun kindTitle(kind: TransactionKind): String {
-        return when (kind) {
-            TransactionKind.PURCHASE, TransactionKind.INSTALLMENT -> "Card purchase"
-            TransactionKind.TRANSFER_IN -> "Transfer in"
-            TransactionKind.TRANSFER_OUT -> "Transfer"
-            TransactionKind.CASH_WITHDRAWAL -> "Cash withdrawal"
-            TransactionKind.REFUND -> "Refund"
-            TransactionKind.REVERSAL -> "Reversal"
-            TransactionKind.FEE -> "Fee"
-            TransactionKind.INCOME -> "Income"
-            TransactionKind.FAILED -> "Failed"
-            TransactionKind.UNKNOWN -> "Transaction"
+    fun eventTitle(eventType: FinancialEventType): String {
+        return when (eventType) {
+            FinancialEventType.CARD_PURCHASE -> "Card purchase"
+            FinancialEventType.INSTALLMENT -> "Installment"
+            FinancialEventType.BANK_TRANSFER -> "Transfer"
+            FinancialEventType.CASH_WITHDRAWAL -> "Cash withdrawal"
+            FinancialEventType.CREDIT_CARD_PAYMENT -> "Credit card payment"
+            FinancialEventType.BILL_PAYMENT -> "Payment"
+            FinancialEventType.REFUND -> "Refund"
+            FinancialEventType.REVERSAL -> "Reversal"
+            FinancialEventType.FEE -> "Fee"
+            FinancialEventType.INCOME -> "Income"
+            FinancialEventType.BALANCE_NOTIFICATION -> "Balance"
+            FinancialEventType.STATEMENT -> "Statement"
+            FinancialEventType.PAYMENT_DUE -> "Payment due"
+            FinancialEventType.FAILED_TRANSACTION -> "Failed"
+            FinancialEventType.DECLINED_TRANSACTION -> "Declined"
+            FinancialEventType.OTHER_FINANCIAL, FinancialEventType.NOT_FINANCIAL -> "Transaction"
         }
+    }
+
+    /** Says plainly why a posted row is not part of what the holder spent. */
+    fun spendNote(spendEffect: SpendEffect): String? = when (spendEffect) {
+        SpendEffect.SPEND, SpendEffect.SPEND_REVERSAL -> null
+        SpendEffect.LIABILITY_SETTLEMENT -> "Settles a card balance, not spending"
+        SpendEffect.TRANSFER_INTERNAL -> "Between your own accounts, not spending"
+        SpendEffect.TRANSFER_EXTERNAL -> "Transfer, not counted as spending"
+        SpendEffect.INCOME -> "Money in"
+        SpendEffect.NONE -> "Not counted as spending"
     }
 
     private val MONTH: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)

@@ -1,95 +1,60 @@
 package expense.intelligence
 
-import expense.money.Currency
 import expense.money.DigitFold
-import expense.money.Money
 import expense.money.MoneyText
+import expense.parse.AmountResolution
+import expense.parse.AmountRole
+import expense.parse.RoledAmount
 import java.time.DateTimeException
 import java.time.LocalDateTime
 
-class DeterministicEntityExtractor : FinancialEntityExtractor {
+/**
+ * Copies entities out of one message using the language of money rather than
+ * the habits of any institution.
+ *
+ * Amounts are located, then named by [AmountRoleTagger], then reduced to a
+ * single event value. A message that states a transaction amount and a
+ * remaining balance resolves cleanly, because the balance never competes for
+ * the event role. Only two different values claiming the same event role are an
+ * ambiguity.
+ */
+class DeterministicEntityExtractor(
+    private val roleTagger: AmountRoleTagger = LexicalAmountRoleTagger(),
+) : FinancialEntityExtractor {
     override fun extract(message: SmsText): ExtractedEntities {
         val folded = DigitFold.fold(message.body)
-        val amounts = findAmounts(folded)
-        val transactionAmounts = amounts.filter { !it.balance }
-        val balanceAmounts = amounts.filter { it.balance }
-        val amountChoice = when {
-            transactionAmounts.map { it.money }.distinct().size > 1 -> null
-            transactionAmounts.size == 1 -> transactionAmounts.single()
-            transactionAmounts.size > 1 -> transactionAmounts.first()
-            else -> null
-        }
-        val role = when {
-            transactionAmounts.map { it.money }.distinct().size > 1 -> AmountRole.AMBIGUOUS
-            amountChoice != null -> AmountRole.TRANSACTION
-            balanceAmounts.isNotEmpty() -> AmountRole.BALANCE
-            else -> AmountRole.ABSENT
-        }
-        val balance = balanceAmounts.firstOrNull()?.money
-        val occurred = findOccurred(folded)
+        val roled = resolveRoles(folded)
+        val claimed = roled.map { it.start..it.end }
         return ExtractedEntities(
-            amount = amountChoice?.money,
-            amountToken = amountChoice?.token,
-            currency = amountChoice?.currency,
-            currencyToken = amountChoice?.currencyToken,
+            amounts = roled,
+            resolution = resolutionOf(roled),
             merchant = findMerchant(folded),
-            accountMask = paymentInstrument(folded)?.mask,
+            instrument = PaymentInstruments.find(folded, claimed),
             reference = findReference(folded),
-            occurredAt = occurred,
-            balance = balance,
-            amountRole = role,
+            occurredAt = findOccurred(folded),
         )
     }
 
-    private data class AmountPattern(
-        val regex: Regex,
-        val currencyGroup: Int,
-        val numberGroup: Int,
-    )
-
-    private data class FoundAmount(
-        val money: Money,
-        val token: String,
-        val currency: Currency,
-        val currencyToken: String,
-        val balance: Boolean,
-        val start: Int,
-        val end: Int,
-    )
-
-    private fun findAmounts(folded: String): List<FoundAmount> {
-        val found = mutableListOf<FoundAmount>()
-        for (spec in amountPatterns) {
-            spec.regex.findAll(folded).forEach { hit ->
-                val currencyToken = hit.groupValues[spec.currencyGroup]
-                val numberToken = hit.groupValues[spec.numberGroup]
-                val currency = currencyOf(currencyToken) ?: return@forEach
-                val money = MoneyText.parse(numberToken, currency) ?: return@forEach
-                val start = hit.range.first
-                found += FoundAmount(
-                    money, numberToken, currency, currencyToken,
-                    balance = false, start = start, end = hit.range.last + 1,
-                )
-            }
-        }
-        val ordered = found.distinctBy { it.start }.sortedBy { it.start }
-        return ordered.mapIndexed { index, item ->
-            val previous = if (index == 0) 0 else ordered[index - 1].end
-            val between = folded.substring(previous, item.start)
-            item.copy(balance = balanceCue.containsMatchIn(between))
+    /**
+     * Names every value, then promotes at most one unnamed value to the event
+     * role when nothing else claims it. Promotion is what keeps terse messages
+     * working; it never overrides a value the message itself explained.
+     */
+    private fun resolveRoles(folded: String): List<RoledAmount> {
+        val tagged = roleTagger.tag(folded, AmountScanner.scan(folded))
+        if (tagged.any { it.role.isEventValue() }) return tagged
+        val promotable = tagged.firstOrNull { it.role == AmountRole.UNKNOWN } ?: return tagged
+        return tagged.map { item ->
+            if (item.start == promotable.start) item.copy(role = AmountRole.TRANSACTION_AMOUNT) else item
         }
     }
 
-    private fun currencyOf(token: String): Currency? {
-        return when (token.uppercase()) {
-            "EGP", "LE" -> Currency.EGP
-            "USD" -> Currency.USD
-            "EUR" -> Currency.EUR
-            "GBP" -> Currency.GBP
-            "جنيه" -> Currency.EGP
-            "دولار" -> Currency.USD
-            "يورو" -> Currency.EUR
-            else -> null
+    private fun resolutionOf(amounts: List<RoledAmount>): AmountResolution {
+        val eventValues = amounts.filter { it.role.isEventValue() }
+        return when {
+            eventValues.isEmpty() -> AmountResolution.MISSING
+            eventValues.map { it.amount }.distinct().size > 1 -> AmountResolution.AMBIGUOUS
+            else -> AmountResolution.RESOLVED
         }
     }
 
@@ -126,7 +91,16 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
         return null
     }
 
+    /**
+     * Day and month order is not stated in an SMS. When the first field cannot
+     * be a day the fields are swapped; when both readings are possible the
+     * common day-first order is used.
+     */
     private fun civil(day: Int, month: Int, year: Int, time: String): LocalDateTime? {
+        val dayFirst = day in 1..31 && month in 1..12
+        val monthFirst = month in 1..31 && day in 1..12
+        val resolvedDay = if (dayFirst) day else if (monthFirst) month else return null
+        val resolvedMonth = if (dayFirst) month else if (monthFirst) day else return null
         val hour: Int
         val minute: Int
         if (time.isBlank()) {
@@ -138,7 +112,7 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
             minute = parts[1].toInt()
         }
         return try {
-            LocalDateTime.of(year, month, day, hour, minute)
+            LocalDateTime.of(year, resolvedMonth, resolvedDay, hour, minute)
         } catch (_: DateTimeException) {
             null
         }
@@ -153,15 +127,8 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
     }
 
     private companion object {
-        val balanceCue = Regex("""(?i)(balance|available\s+limit|الرصيد)""")
-        val amountPatterns = listOf(
-            AmountPattern(Regex("""(?i)\b(EGP|USD|EUR|GBP|LE)\s+([0-9]+(?:[.,][0-9]+)*)"""), currencyGroup = 1, numberGroup = 2),
-            AmountPattern(Regex("""(?i)\b([0-9]+(?:[.,][0-9]+)*)\s+(EGP|USD|EUR|GBP|LE)\b"""), currencyGroup = 2, numberGroup = 1),
-            AmountPattern(Regex("""(جنيه|دولار|يورو)\s*([0-9]+(?:[.,][0-9]+)*)"""), currencyGroup = 1, numberGroup = 2),
-            AmountPattern(Regex("""([0-9]+(?:[.,][0-9]+)*)\s*(جنيه|دولار|يورو)"""), currencyGroup = 2, numberGroup = 1),
-        )
         val merchantPattern = Regex(
-            """(?i)(?:\b(?:at|from|by|to)\b|عند|لدى)\s+([A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9&'.-]*(?:\s+[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9&'.-]*)?)""",
+            """(?i)(?:\b(?:at|from|by|to)\b|عند|لدى|من)\s+([A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9&'.-]*(?:\s+[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9&'.-]*)?)""",
         )
         val merchantStops = setOf(
             "on", "ref", "reference", "available", "balance", "for", "with", "card", "ending",
@@ -182,94 +149,40 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
     }
 }
 
+/**
+ * Checks that every claimed entity is traceable to the message.
+ *
+ * This answers extraction validity and nothing else. Whether an event happened
+ * is [EventStateDetector]'s question and whether it may post is
+ * [FinancialRouting]'s, so a message with no amount is not invalid here.
+ */
 class DeterministicTransactionValidator : TransactionValidator {
-    override fun validate(
-        message: SmsText,
-        classification: Classification,
-        entities: ExtractedEntities,
-    ): ValidationResult {
+    override fun validate(message: SmsText, entities: ExtractedEntities): ValidationResult {
         val folded = DigitFold.fold(message.body)
         val reasons = mutableListOf<String>()
-        if (entities.amount != null) {
-            val token = entities.amountToken
-            if (token.isNullOrBlank() || !folded.contains(token)) {
+        entities.amounts.forEach { roled ->
+            if (!folded.contains(roled.token)) {
                 reasons += "amount_not_in_message"
-            } else if (entities.currency != null && MoneyText.parse(token, entities.currency) != entities.amount) {
+            } else if (MoneyText.parse(roled.token, roled.amount.currency) != roled.amount) {
                 reasons += "amount_contradicts_token"
             }
-        }
-        if (entities.currency != null && entities.currency.code !in supported) reasons += "currency_unsupported"
-        if (!entities.currencyToken.isNullOrBlank() && !folded.contains(entities.currencyToken, ignoreCase = true)) {
-            reasons += "currency_not_in_message"
+            if (roled.currencyToken.isNotBlank() && !folded.contains(roled.currencyToken, ignoreCase = true)) {
+                reasons += "currency_not_in_message"
+            }
+            if (roled.amount.currency.code !in supported) reasons += "currency_unsupported"
         }
         if (!entities.merchant.isNullOrBlank() && !folded.contains(entities.merchant, ignoreCase = true)) {
             reasons += "merchant_not_in_message"
         }
-        if (!entities.accountMask.isNullOrBlank() && !folded.contains(entities.accountMask)) reasons += "mask_not_in_message"
+        val mask = entities.accountMask
+        if (!mask.isNullOrBlank() && !folded.contains(mask)) reasons += "mask_not_in_message"
         if (!entities.reference.isNullOrBlank() && !folded.contains(entities.reference, ignoreCase = true)) {
             reasons += "reference_not_in_message"
         }
-        val forbidden = !classification.type.isLedgerCandidate()
-        if (!forbidden) {
-            if (entities.amount == null || entities.amountRole != AmountRole.TRANSACTION) reasons += "amount_missing"
-            if (classification.ambiguous) reasons += "ambiguous_class"
-        }
-        val review = !forbidden && reasons.isNotEmpty()
-        return ValidationResult(
-            accepted = reasons.isEmpty(),
-            contradictions = reasons,
-            forcesReview = review,
-            ledgerForbidden = forbidden,
-        )
+        return ValidationResult(accepted = reasons.isEmpty(), contradictions = reasons.distinct())
     }
 
     private companion object {
-        val supported = setOf("EGP", "USD", "EUR", "GBP")
+        val supported = setOf("EGP", "USD", "EUR", "GBP", "SAR", "AED")
     }
 }
-
-/**
- * Last-4 digits the SMS states next to a card, an account, or a mask.
- * A bare number, an order number, and a phone number are not an instrument.
- */
-data class PaymentInstrument(
-    val mask: String,
-    val kind: InstrumentKind,
-)
-
-enum class InstrumentKind {
-    CREDIT_CARD,
-    DEBIT_CARD,
-    ACCOUNT,
-    CARD,
-    UNSPECIFIED,
-}
-
-fun paymentInstrument(body: String): PaymentInstrument? {
-    val folded = DigitFold.fold(body)
-    val match = instrumentPattern.find(folded) ?: return null
-    val mask = match.groupValues.drop(1).firstOrNull { it.length == 4 && it.all(Char::isDigit) } ?: return null
-    val start = (match.range.first - 48).coerceAtLeast(0)
-    val window = folded.substring(start, match.range.last + 1)
-    return PaymentInstrument(mask, instrumentKind(window))
-}
-
-private fun instrumentKind(window: String): InstrumentKind {
-    return when {
-        creditInstrument.containsMatchIn(window) -> InstrumentKind.CREDIT_CARD
-        debitInstrument.containsMatchIn(window) -> InstrumentKind.DEBIT_CARD
-        accountInstrument.containsMatchIn(window) -> InstrumentKind.ACCOUNT
-        cardInstrument.containsMatchIn(window) -> InstrumentKind.CARD
-        else -> InstrumentKind.UNSPECIFIED
-    }
-}
-
-private val instrumentWord =
-    """(?:\b(?:credit\s+card|debit\s+card|card|account|acct)\b|\ba/c\b|بطاقة\s+ائتمان|بطاقة\s+خصم|بطاقتك|بطاقة|حسابك|حساب|المنتهية)"""
-private val instrumentPattern = Regex(
-    """(?i)(?:$instrumentWord\s*(?:(?:no\.?|number|رقم|ending|ends|#)\s*)?(?:(?:with|in|بـ|برقم)\s*)?(?:[*xX•●·]|\s)*(\d{4})\b)|(?:[*xX•●·]{2,}\s*(\d{4})\b)|(?:\b(?:ending|ends)\s+(?:(?:with|in)\s+)?(?:[*xX•●·]|\s)*(\d{4})\b)""",
-)
-private val creditInstrument = Regex("""(?i)\bcredit\s+card\b|بطاقة\s+ائتمان|ائتمان""")
-private val debitInstrument = Regex("""(?i)\bdebit\s+card\b|بطاقة\s+خصم""")
-private val accountInstrument = Regex("""(?i)\b(?:account|acct|a/c)\b|حساب""")
-private val cardInstrument = Regex("""(?i)\bcard\b|بطاقة""")

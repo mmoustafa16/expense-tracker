@@ -1,5 +1,7 @@
 package expense.intelligence
 
+import expense.parse.Direction
+import expense.parse.FinancialEventType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
@@ -367,18 +369,15 @@ internal class SemanticHead private constructor(
         }
         val label = labels[best]
         val confidence = (probabilities[best] * 100.0).roundToInt().coerceIn(0, 100)
-        val semantics = SmsSemantics(
-            intent = label.name,
-            transactionCompleted = label.transactionCompleted,
-            moneyMovement = label.moneyMovement,
-            direction = label.direction,
-            confidence = confidence,
-        )
         return Classification(
-            type = label.type,
+            eventType = label.eventType,
             confidence = confidence,
             ambiguous = label.ambiguous,
-            semantics = semantics,
+            semantics = SmsSemantics(
+                intent = label.name,
+                direction = label.direction,
+                confidence = confidence,
+            ),
         )
     }
 
@@ -392,13 +391,11 @@ internal class SemanticHead private constructor(
                 labels.add(
                     SemanticLabel(
                         name = row.getString("name"),
-                        type = TransactionClass.valueOf(row.getString("transactionClass")),
-                        transactionCompleted = row.getBoolean("transactionCompleted"),
-                        moneyMovement = row.getBoolean("moneyMovement"),
+                        eventType = FinancialEventType.valueOf(row.getString("eventType")),
                         direction = if (row.isNull("direction")) {
                             null
                         } else {
-                            MoneyDirection.valueOf(row.getString("direction"))
+                            Direction.valueOf(row.getString("direction"))
                         },
                         ambiguous = row.getBoolean("ambiguous"),
                     ),
@@ -416,12 +413,18 @@ internal class SemanticHead private constructor(
     }
 }
 
+/**
+ * One model output class.
+ *
+ * The label states the meaning of the message and nothing more. Whether the
+ * event completed and whether money moved are read from the message by
+ * [EventStateDetector], so those facts cannot go stale in this file when the
+ * model is retrained.
+ */
 private data class SemanticLabel(
     val name: String,
-    val type: TransactionClass,
-    val transactionCompleted: Boolean,
-    val moneyMovement: Boolean,
-    val direction: MoneyDirection?,
+    val eventType: FinancialEventType,
+    val direction: Direction?,
     val ambiguous: Boolean,
 )
 

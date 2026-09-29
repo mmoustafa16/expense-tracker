@@ -145,46 +145,23 @@ class PublicBankMetadata(
 }
 
 /**
- * Senders this device has already accepted as notifying institutions.
- * A sender is remembered only after a message from that exact address carried
- * an explicit card or account instrument and was posted. The set starts empty.
- */
-fun interface InstitutionMemory {
-    fun remembers(sender: String): Boolean
-
-    companion object {
-        val EMPTY: InstitutionMemory = InstitutionMemory { false }
-    }
-}
-
-class MutableInstitutionMemory : InstitutionMemory {
-    private val known = linkedSetOf<String>()
-
-    fun remember(sender: String) {
-        val trimmed = sender.trim()
-        if (trimmed.isNotEmpty()) known += trimmed
-    }
-
-    fun preload(senders: Collection<String>) {
-        senders.forEach(::remember)
-    }
-
-    fun snapshot(): Set<String> = known.toSet()
-
-    override fun remembers(sender: String): Boolean = sender.trim() in known
-}
-
-/**
- * Names the sender channel. An alphanumeric address or a short code is not a
- * financial institution by itself.
+ * Names the sender channel and decides whether its history has earned the right
+ * to post.
  *
- * The channel is verified only when this message states a card or account
- * instrument, or when this device already remembered that exact sender from an
- * earlier instrument. A handset number, a blank sender, and a one- or
- * two-character token produce no institution. This type does not read a bank list.
+ * An alphanumeric address is a channel, not an institution. The channel becomes
+ * an institution only when [InstitutionEvidencePolicy] is satisfied by what this
+ * device has already seen from that exact address: repeated completed money
+ * movements, in more than one form or with consistent instrument masks, and more
+ * financial traffic than not. A hospital, a restaurant, a delivery service, and
+ * a marketing channel never clear that bar, and no list of their names is
+ * needed to keep them out.
+ *
+ * A handset number, a blank sender, and a one- or two-character token produce no
+ * institution. This type does not read a bank list and does not read the body.
  */
 class InstitutionalSenderDiscovery(
-    private val memory: InstitutionMemory = InstitutionMemory.EMPTY,
+    private val evidence: SenderEvidenceSource = SenderEvidenceSource.EMPTY,
+    private val policy: InstitutionEvidencePolicy = InstitutionEvidencePolicy.DEFAULT,
 ) : BankDiscoverySource {
     override val kind: DiscoverySourceKind = DiscoverySourceKind.INSTITUTIONAL_SENDER
 
@@ -193,21 +170,30 @@ class InstitutionalSenderDiscovery(
         if (!isInstitutionalChannel(sender)) return emptyList()
         val id = senderInstitutionId(sender)
         if (id.length < MIN_ID_LENGTH) return emptyList()
-        val instrument = paymentInstrument(message.body) != null
-        val remembered = memory.remembers(sender)
+        val history = evidence.evidenceFor(sender)
+        val verified = history != null && policy.verifies(history)
         return listOf(
             DiscoveredInstitution(
                 institutionId = id,
                 displayName = sender,
-                confidence = if (instrument || remembered) CHANNEL_CONFIDENCE else CHANNEL_CANDIDATE,
+                confidence = if (verified) CHANNEL_CONFIDENCE else CHANNEL_CANDIDATE,
                 source = kind,
-                verified = instrument || remembered,
-                evidence = listOf(
-                    MatchedEvidence(EvidenceKind.SENDER_ALIAS, sender),
-                    MatchedEvidence(EvidenceKind.SENDER_SHAPE, senderAddressShape(sender).name),
-                ),
+                verified = verified,
+                evidence = buildList {
+                    add(MatchedEvidence(EvidenceKind.SENDER_ALIAS, sender))
+                    add(MatchedEvidence(EvidenceKind.SENDER_SHAPE, senderAddressShape(sender).name))
+                    if (history != null) {
+                        add(MatchedEvidence(EvidenceKind.SENDER_HISTORY, historyLabel(history)))
+                    }
+                },
             ),
         )
+    }
+
+    /** A closed summary of the counts. It carries no message text. */
+    private fun historyLabel(history: SenderEvidence): String {
+        return "events=${history.financialEvents} movements=${history.movementEvents} " +
+            "forms=${history.movementEventTypes} masks=${history.instrumentMasks.size}"
     }
 
     private companion object {

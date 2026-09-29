@@ -1,7 +1,7 @@
 package expense.ledger
 
 import expense.money.Money
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.abs
@@ -32,13 +32,13 @@ object DuplicateMatcher {
         transactions: List<Transaction>,
         institutionId: String,
         reference: String?,
-        kind: TransactionKind,
+        eventType: FinancialEventType,
     ): Transaction? {
         if (reference.isNullOrBlank()) return null
         return transactions.find { tx ->
             tx.institutionId == institutionId &&
                 tx.reference == reference &&
-                tx.kind == kind
+                tx.eventType == eventType
         }
     }
 
@@ -50,13 +50,13 @@ object DuplicateMatcher {
         institutionId: String,
         mask: String?,
         amount: Money,
-        kind: TransactionKind,
+        eventType: FinancialEventType,
         occurredAt: Instant,
         reference: String?,
     ): List<Transaction> {
         return transactions.filter { tx ->
             val sameReference = !reference.isNullOrBlank() && tx.reference == reference
-            tx.kind == kind &&
+            tx.eventType == eventType &&
                 tx.institutionId == institutionId &&
                 accountMask(tx, accounts) == mask &&
                 tx.amount == amount &&

@@ -1,0 +1,179 @@
+-- Separates what a transaction was from what it does to spending, and records
+-- the evidence a sender has accumulated.
+--
+-- The tables are rebuilt rather than altered because the SQLite that ships with
+-- the oldest supported Android cannot drop or rename a column, and `kind` had
+-- to go: keeping it beside `event_type` would leave two answers to the same
+-- question and invite them to disagree.
+
+CREATE TABLE ledger_transaction_next (
+  id TEXT NOT NULL PRIMARY KEY,
+  dedup_key TEXT NOT NULL,
+  sms_id TEXT NOT NULL,
+  institution_id TEXT NOT NULL,
+  account_id TEXT,
+  event_type TEXT NOT NULL,
+  spend_effect TEXT NOT NULL,
+  status TEXT NOT NULL,
+  amount_minor INTEGER NOT NULL,
+  amount_currency TEXT NOT NULL,
+  amount_text TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  occurred_at INTEGER NOT NULL,
+  occurred_civil TEXT NOT NULL,
+  occurred_source TEXT NOT NULL,
+  merchant_raw TEXT,
+  merchant_id TEXT,
+  category_id TEXT,
+  category_source TEXT NOT NULL,
+  reference TEXT,
+  balance_minor INTEGER,
+  balance_currency TEXT,
+  foreign_minor INTEGER,
+  foreign_currency TEXT,
+  duplicate_of_id TEXT,
+  linked_transaction_id TEXT,
+  include_in_spend INTEGER NOT NULL,
+  pipeline_version TEXT NOT NULL,
+  profile_version TEXT NOT NULL,
+  installment_index INTEGER,
+  installment_count INTEGER,
+  manual INTEGER NOT NULL,
+  revision TEXT NOT NULL
+);
+
+INSERT INTO ledger_transaction_next
+SELECT
+  id, dedup_key, sms_id, institution_id, account_id,
+  CASE kind
+    WHEN 'PURCHASE' THEN 'CARD_PURCHASE'
+    WHEN 'INSTALLMENT' THEN 'INSTALLMENT'
+    WHEN 'FEE' THEN 'FEE'
+    WHEN 'CASH_WITHDRAWAL' THEN 'CASH_WITHDRAWAL'
+    WHEN 'REFUND' THEN 'REFUND'
+    WHEN 'REVERSAL' THEN 'REVERSAL'
+    WHEN 'FAILED' THEN 'FAILED_TRANSACTION'
+    WHEN 'TRANSFER_IN' THEN 'BANK_TRANSFER'
+    WHEN 'TRANSFER_OUT' THEN 'BANK_TRANSFER'
+    WHEN 'INCOME' THEN 'INCOME'
+    ELSE 'OTHER_FINANCIAL'
+  END,
+  CASE kind
+    WHEN 'PURCHASE' THEN 'SPEND'
+    WHEN 'INSTALLMENT' THEN 'SPEND'
+    WHEN 'FEE' THEN 'SPEND'
+    WHEN 'CASH_WITHDRAWAL' THEN 'SPEND'
+    WHEN 'REFUND' THEN 'SPEND_REVERSAL'
+    WHEN 'TRANSFER_IN' THEN 'TRANSFER_EXTERNAL'
+    WHEN 'TRANSFER_OUT' THEN 'TRANSFER_EXTERNAL'
+    WHEN 'INCOME' THEN 'INCOME'
+    ELSE 'NONE'
+  END,
+  status, amount_minor, amount_currency, amount_text, direction,
+  occurred_at, occurred_civil, occurred_source, merchant_raw, merchant_id,
+  category_id, category_source, reference, balance_minor, balance_currency,
+  foreign_minor, foreign_currency, duplicate_of_id, linked_transaction_id,
+  include_in_spend, pipeline_version, profile_version,
+  installment_index, installment_count, manual,
+  ''
+FROM ledger_transaction;
+
+DROP TABLE ledger_transaction;
+
+ALTER TABLE ledger_transaction_next RENAME TO ledger_transaction;
+
+-- Brings stored rows onto the spend rule that reads the effect rather than the
+-- kind. Rows the account holder decided about themselves keep their decision:
+-- their correction is replayed from the correction table, not recomputed here.
+UPDATE ledger_transaction
+SET include_in_spend = CASE
+  WHEN spend_effect IN ('SPEND', 'SPEND_REVERSAL')
+   AND status NOT IN ('VOIDED', 'EXCLUDED') THEN 1
+  ELSE 0
+END
+WHERE dedup_key NOT IN (
+  SELECT dedup_key FROM correction WHERE field = 'INCLUDE_IN_SPEND'
+);
+
+CREATE TABLE extraction_candidate_next (
+  attempt_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  spend_effect TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  amount_minor INTEGER,
+  amount_currency TEXT,
+  merchant_raw TEXT,
+  occurred_at TEXT,
+  reference TEXT,
+  account_mask TEXT,
+  account_kind TEXT,
+  balance_minor INTEGER,
+  balance_currency TEXT,
+  foreign_minor INTEGER,
+  foreign_currency TEXT,
+  installment_index INTEGER,
+  installment_count INTEGER,
+  PRIMARY KEY (attempt_id, position)
+);
+
+INSERT INTO extraction_candidate_next
+SELECT
+  attempt_id, position,
+  CASE kind
+    WHEN 'PURCHASE' THEN 'CARD_PURCHASE'
+    WHEN 'INSTALLMENT' THEN 'INSTALLMENT'
+    WHEN 'FEE' THEN 'FEE'
+    WHEN 'CASH_WITHDRAWAL' THEN 'CASH_WITHDRAWAL'
+    WHEN 'REFUND' THEN 'REFUND'
+    WHEN 'REVERSAL' THEN 'REVERSAL'
+    WHEN 'FAILED' THEN 'FAILED_TRANSACTION'
+    WHEN 'TRANSFER_IN' THEN 'BANK_TRANSFER'
+    WHEN 'TRANSFER_OUT' THEN 'BANK_TRANSFER'
+    WHEN 'INCOME' THEN 'INCOME'
+    ELSE 'OTHER_FINANCIAL'
+  END,
+  CASE kind
+    WHEN 'PURCHASE' THEN 'SPEND'
+    WHEN 'INSTALLMENT' THEN 'SPEND'
+    WHEN 'FEE' THEN 'SPEND'
+    WHEN 'CASH_WITHDRAWAL' THEN 'SPEND'
+    WHEN 'REFUND' THEN 'SPEND_REVERSAL'
+    WHEN 'TRANSFER_IN' THEN 'TRANSFER_EXTERNAL'
+    WHEN 'TRANSFER_OUT' THEN 'TRANSFER_EXTERNAL'
+    WHEN 'INCOME' THEN 'INCOME'
+    ELSE 'NONE'
+  END,
+  direction, amount_minor, amount_currency, merchant_raw, occurred_at,
+  reference, account_mask, account_kind, balance_minor, balance_currency,
+  foreign_minor, foreign_currency, installment_index, installment_count
+FROM extraction_candidate;
+
+DROP TABLE extraction_candidate;
+
+ALTER TABLE extraction_candidate_next RENAME TO extraction_candidate;
+
+-- Stored readings carry the event type they produced, so a count of financial
+-- events comes from the reading instead of from whether a body was retained.
+-- Rows written before this column existed are unknown, not non-financial, and a
+-- revision pass replaces them with a real reading.
+ALTER TABLE parse_attempt ADD COLUMN event_type TEXT NOT NULL DEFAULT 'OTHER_FINANCIAL';
+
+UPDATE parse_attempt SET event_type = 'NOT_FINANCIAL' WHERE status = 'IGNORED_NOT_BANK';
+
+CREATE TABLE sender_evidence (
+  sender TEXT NOT NULL PRIMARY KEY,
+  institution_id TEXT NOT NULL,
+  financial_events INTEGER NOT NULL,
+  movement_events INTEGER NOT NULL,
+  non_financial_events INTEGER NOT NULL,
+  event_types TEXT NOT NULL,
+  instrument_masks TEXT NOT NULL,
+  instrument_kinds TEXT NOT NULL
+);
+
+-- A remembered sender was accepted from a single message carrying an instrument.
+-- That is not the aggregate evidence verification now requires, so the old list
+-- is discarded instead of being promoted: every sender re-earns the right to
+-- post from what this device can still see in the inbox.
+DROP TABLE learned_sender;

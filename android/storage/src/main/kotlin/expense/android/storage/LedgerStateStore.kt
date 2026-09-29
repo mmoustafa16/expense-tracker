@@ -1,6 +1,7 @@
 package expense.android.storage
 
 import expense.android.storage.db.ExpenseDatabase
+import expense.android.storage.db.SelectRevisableTransactions
 import expense.categories.Category
 import expense.categories.CategoryCatalog
 import expense.categories.CategoryRule
@@ -14,8 +15,10 @@ import expense.ledger.CorrectionField
 import expense.ledger.EvidenceRole
 import expense.ledger.LedgerState
 import expense.ledger.OccurredSource
+import expense.ingest.CairoClock
 import expense.ledger.PossibleDuplicate
 import expense.ledger.ReviewDismissal
+import expense.ledger.SpendPolicy
 import expense.ledger.StoredSms
 import expense.ledger.Transaction
 import expense.ledger.TransactionEvidence
@@ -28,21 +31,26 @@ import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.ingest.ExplicitAccount
 import expense.ingest.PipelineMetadata
 import expense.ingest.StoredInterpretation
+import expense.intelligence.SenderEvidence
 import expense.intelligence.senderInstitutionId
 import expense.parse.Extraction
 import expense.parse.ParseAttempt
+import expense.parse.FinancialEventType
 import expense.parse.ParseStatus
+import expense.parse.SpendEffect
 import expense.parse.TransactionCandidate
-import expense.parse.TransactionKind
 import java.time.Instant
 import java.time.LocalDateTime
 
 class SqlDelightLedgerRepository(
     private val database: ExpenseDatabase,
 ) {
+    private companion object {
+        const val SET_SEPARATOR: String = ","
+    }
+
     fun ensureSeed() {
         database.transaction {
             CategorySeed.all.forEach { category -> insertCategory(category, system = true) }
@@ -114,7 +122,8 @@ class SqlDelightLedgerRepository(
                         confidence = confidence.toInt(),
                         candidates = rows.map { candidate ->
                             TransactionCandidate(
-                                kind = TransactionKind.valueOf(candidate.kind),
+                                eventType = FinancialEventType.valueOf(candidate.eventType),
+                                spendEffect = SpendEffect.valueOf(candidate.spendEffect),
                                 amount = money(candidate.amountMinor, candidate.amountCurrency),
                                 direction = Direction.valueOf(candidate.direction),
                                 merchantRaw = candidate.merchantRaw,
@@ -138,6 +147,7 @@ class SqlDelightLedgerRepository(
                     profileVersion = row.profileVersion,
                     templateId = row.templateId,
                     status = ParseStatus.valueOf(row.status),
+                    eventType = eventTypeOf(row.eventType),
                     confidence = row.confidence?.toInt(),
                     extraction = extraction,
                     error = row.error,
@@ -161,7 +171,8 @@ class SqlDelightLedgerRepository(
                     smsId = row.smsId,
                     institutionId = row.institutionId,
                     accountId = row.accountId,
-                    kind = TransactionKind.valueOf(row.kind),
+                    eventType = FinancialEventType.valueOf(row.eventType),
+                    spendEffect = SpendEffect.valueOf(row.spendEffect),
                     status = TransactionStatus.valueOf(row.status),
                     amount = Money(row.amountMinor, Currency.of(row.amountCurrency)),
                     direction = Direction.valueOf(row.direction),
@@ -289,6 +300,7 @@ class SqlDelightLedgerRepository(
                     profileVersion = attempt.profileVersion,
                     templateId = attempt.templateId,
                     status = attempt.status.name,
+                    eventType = attempt.eventType.name,
                     confidence = attempt.confidence?.toLong(),
                     error = attempt.error,
                 )
@@ -296,7 +308,8 @@ class SqlDelightLedgerRepository(
                     queries.insertCandidate(
                         attemptId = attempt.id,
                         position = index.toLong(),
-                        kind = candidate.kind.name,
+                        eventType = candidate.eventType.name,
+                        spendEffect = candidate.spendEffect.name,
                         direction = candidate.direction.name,
                         amountMinor = candidate.amount?.amountMinor,
                         amountCurrency = candidate.amount?.currency?.code,
@@ -367,7 +380,8 @@ class SqlDelightLedgerRepository(
                     smsId = tx.smsId,
                     institutionId = tx.institutionId,
                     accountId = tx.accountId,
-                    kind = tx.kind.name,
+                    eventType = tx.eventType.name,
+                    spendEffect = tx.spendEffect.name,
                     status = tx.status.name,
                     amountMinor = tx.amount.amountMinor,
                     amountCurrency = tx.amount.currency.code,
@@ -393,6 +407,7 @@ class SqlDelightLedgerRepository(
                     installmentIndex = tx.installmentIndex?.toLong(),
                     installmentCount = tx.installmentCount?.toLong(),
                     manual = if (tx.manual) 1L else 0L,
+                    revision = PipelineMetadata.VERSION,
                 )
             }
             state.evidence.forEach { evidence ->
@@ -495,7 +510,8 @@ class SqlDelightLedgerRepository(
                     smsId = row.smsId,
                     institutionId = row.institutionId,
                     accountId = row.accountId,
-                    kind = TransactionKind.valueOf(row.kind),
+                    eventType = FinancialEventType.valueOf(row.eventType),
+                    spendEffect = SpendEffect.valueOf(row.spendEffect),
                     status = TransactionStatus.valueOf(row.status),
                     amount = Money(row.amountMinor, Currency.of(row.amountCurrency)),
                     direction = Direction.valueOf(row.direction),
@@ -528,16 +544,19 @@ class SqlDelightLedgerRepository(
         )
     }
 
+    /**
+     * Six counts over six populations. None of them stands in for another, so
+     * two screens reading this cannot disagree while both are right.
+     */
     fun storedTally(): expense.ingest.IngestTally {
         val queries = database.expenseQueries
-        val statuses = queries.countAttemptsByStatus().executeAsList().associate { it.status to it.total.toInt() }
         return expense.ingest.IngestTally(
-            scanned = queries.countMessages().executeAsOne().toInt(),
-            financial = queries.countRetainedMessages().executeAsOne().toInt(),
-            matchedProfile = queries.countMatchedAttempts().executeAsOne().toInt(),
-            unsupported = statuses[ParseStatus.UNSUPPORTED.name] ?: 0,
-            parsed = statuses[ParseStatus.PARSED.name] ?: 0,
-            posted = queries.countPostedTransactions().executeAsOne().toInt(),
+            smsScanned = queries.countMessages().executeAsOne().toInt(),
+            financialEvents = queries.countFinancialEvents().executeAsOne().toInt(),
+            postedTransactions = queries.countPostedTransactions().executeAsOne().toInt(),
+            reviewItems = queries.countOpenReview().executeAsOne().toInt(),
+            spendTransactions = queries.countSpendTransactions().executeAsOne().toInt(),
+            excludedFinancialEvents = queries.countExcludedFinancialEvents().executeAsOne().toInt(),
         )
     }
 
@@ -664,6 +683,7 @@ class SqlDelightLedgerRepository(
                 profileVersion = decision.profile?.version,
                 templateId = decision.templateId,
                 status = decision.status.name,
+                eventType = decision.eventType.name,
                 confidence = decision.extraction?.confidence?.toLong(),
                 error = decision.error,
             )
@@ -674,6 +694,7 @@ class SqlDelightLedgerRepository(
                 profileVersion = decision.profile?.version,
                 templateId = decision.templateId,
                 status = decision.status.name,
+                eventType = decision.eventType.name,
                 confidence = decision.extraction?.confidence?.toLong(),
                 error = decision.error,
                 id = attemptId,
@@ -685,7 +706,8 @@ class SqlDelightLedgerRepository(
             queries.insertCandidate(
                 attemptId = attemptId,
                 position = index.toLong(),
-                kind = candidate.kind.name,
+                eventType = candidate.eventType.name,
+                spendEffect = candidate.spendEffect.name,
                 direction = candidate.direction.name,
                 amountMinor = candidate.amount?.amountMinor,
                 amountCurrency = candidate.amount?.currency?.code,
@@ -741,6 +763,7 @@ class SqlDelightLedgerRepository(
                     profileVersion = attempt.profileVersion,
                     templateId = attempt.templateId,
                     status = attempt.status.name,
+                    eventType = attempt.eventType.name,
                     confidence = attempt.confidence?.toLong(),
                     error = attempt.error,
                 )
@@ -748,7 +771,8 @@ class SqlDelightLedgerRepository(
                     queries.insertCandidate(
                         attemptId = attempt.id,
                         position = index.toLong(),
-                        kind = candidate.kind.name,
+                        eventType = candidate.eventType.name,
+                        spendEffect = candidate.spendEffect.name,
                         direction = candidate.direction.name,
                         amountMinor = candidate.amount?.amountMinor,
                         amountCurrency = candidate.amount?.currency?.code,
@@ -852,70 +876,169 @@ class SqlDelightLedgerRepository(
         return next
     }
 
-    fun inboxHighWater(): Pair<Long, Long>? {
-        val row = database.expenseQueries.selectInboxHighWater().executeAsOneOrNull() ?: return null
-        val id = row.providerMessageId?.toLongOrNull() ?: return null
-        return row.receivedAt to id
+    /** Highest provider row id stored, or null before the first sync. */
+    fun inboxWatermark(): Long? {
+        return database.expenseQueries.selectInboxWatermark().executeAsOneOrNull()?.providerMessageId
     }
 
-    fun learnedSenders(): List<String> = database.expenseQueries.selectLearnedSenders().executeAsList()
+    fun adoptProviderId(smsId: String, providerMessageId: String) {
+        database.expenseQueries.updateSmsProviderId(providerMessageId = providerMessageId, id = smsId)
+    }
 
-    fun rememberSenders(senders: Set<String>) {
-        if (senders.isEmpty()) return
-        val queries = database.expenseQueries
-        senders.forEach { sender ->
-            queries.insertLearnedSender(
-                sender = sender,
-                institutionId = senderInstitutionId(sender),
-                displayName = sender,
+    fun senderEvidence(): List<SenderEvidence> {
+        return database.expenseQueries.selectSenderEvidence().executeAsList().map { row ->
+            SenderEvidence(
+                sender = row.sender,
+                financialEvents = row.financialEvents.toInt(),
+                movementEvents = row.movementEvents.toInt(),
+                nonFinancialEvents = row.nonFinancialEvents.toInt(),
+                eventTypes = row.eventTypes.split(SET_SEPARATOR)
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { name -> runCatching { FinancialEventType.valueOf(name) }.getOrNull() }
+                    .toSet(),
+                instrumentMasks = row.instrumentMasks.split(SET_SEPARATOR).filter { it.isNotBlank() }.toSet(),
+                instrumentKinds = row.instrumentKinds.split(SET_SEPARATOR)
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { name -> runCatching { AccountKind.valueOf(name) }.getOrNull() }
+                    .toSet(),
             )
         }
     }
 
+    fun saveSenderEvidence(records: Collection<SenderEvidence>) {
+        if (records.isEmpty()) return
+        val queries = database.expenseQueries
+        database.transaction {
+            records.forEach { record ->
+                queries.insertSenderEvidence(
+                    sender = record.sender,
+                    institutionId = senderInstitutionId(record.sender),
+                    financialEvents = record.financialEvents.toLong(),
+                    movementEvents = record.movementEvents.toLong(),
+                    nonFinancialEvents = record.nonFinancialEvents.toLong(),
+                    eventTypes = record.eventTypes.joinToString(SET_SEPARATOR) { it.name },
+                    instrumentMasks = record.instrumentMasks.joinToString(SET_SEPARATOR),
+                    instrumentKinds = record.instrumentKinds.joinToString(SET_SEPARATOR) { it.name },
+                )
+            }
+        }
+    }
+
     /**
-     * Fills a missing account only when the stored SMS states a card or account
-     * last-4. Rows that do not state one stay unassociated. One page is one
-     * transaction. Returns how many transactions were linked.
+     * Re-reads every posted transaction whose SMS this device still holds and
+     * writes the newer reading onto the row that is already there.
+     *
+     * This is the half of a revision that reclassifying review rows cannot do.
+     * A transaction posted under an older reading is otherwise frozen with it:
+     * a card the old instrument matcher could not see stays unassociated
+     * forever, a credit-card payment keeps counting as spending, and a
+     * misordered date keeps its wrong civil time. Updating in place keeps the
+     * row id and the dedup key, so user corrections still apply and no second
+     * transaction appears for the same message.
+     *
+     * One page is one database transaction, and each row is stamped with
+     * [revision] inside it, so a process death repeats only the page that did
+     * not commit and a second run over stamped rows changes nothing.
+     *
+     * Returns how many rows were rewritten.
      */
-    fun relinkUnassigned(
+    fun reviseStoredTransactions(
         pageSize: Int,
-        identify: (String) -> ExplicitAccount?,
+        revision: String = PipelineMetadata.VERSION,
+        interpret: (sender: String, body: String) -> StoredInterpretation,
         newAccountId: () -> String,
     ): Int {
         require(pageSize > 0)
-        var offset = 0
-        var linked = 0
+        var revised = 0
         while (true) {
             val page = database.expenseQueries
-                .selectUnlinkedTransactions(pageSize.toLong(), offset.toLong())
+                .selectRevisableTransactions(revision, pageSize.toLong())
                 .executeAsList()
-            if (page.isEmpty()) return linked
-            var linkedHere = 0
+            if (page.isEmpty()) return revised
+            val readings = page.map { row -> row to interpret(row.sender, checkNotNull(row.body)) }
             database.transaction {
-                for (row in page) {
-                    val body = row.body ?: continue
-                    val account = identify(body) ?: continue
-                    val existing = database.expenseQueries.selectAccountId(
-                        institutionId = row.institutionId,
-                        kind = account.kind.name,
-                        mask = account.mask,
-                    ).executeAsOneOrNull()
-                    val accountId = existing ?: newAccountId().also { id ->
-                        database.expenseQueries.insertAccount(
-                            id = id,
-                            institutionId = row.institutionId,
-                            kind = account.kind.name,
-                            mask = account.mask,
-                            currency = row.currency,
-                            displayName = "",
-                        )
-                    }
-                    database.expenseQueries.updateTransactionAccount(accountId = accountId, id = row.transactionId)
-                    linkedHere++
+                for ((row, reading) in readings) {
+                    if (reviseRow(row, reading, revision, newAccountId)) revised++
                 }
             }
-            linked += linkedHere
-            offset += page.size - linkedHere
+        }
+    }
+
+    fun staleRevisionCount(revision: String = PipelineMetadata.VERSION): Int {
+        return database.expenseQueries.countStaleRevisions(revision).executeAsOne().toInt()
+    }
+
+    private fun reviseRow(
+        row: SelectRevisableTransactions,
+        reading: StoredInterpretation,
+        revision: String,
+        newAccountId: () -> String,
+    ): Boolean {
+        val queries = database.expenseQueries
+        val candidate = reading.candidate
+        if (candidate == null) {
+            queries.markTransactionRevision(revision = revision, id = row.transactionId)
+            return false
+        }
+        val status = TransactionStatus.valueOf(row.status)
+        val accountId = row.accountId ?: accountFor(row, candidate.accountMask, candidate.accountKind, newAccountId)
+        val civil = candidate.occurredAt
+        val occurredSource = if (civil != null) OccurredSource.SMS_FIELD else OccurredSource.valueOf(row.occurredSource)
+        val occurredCivil = civil ?: LocalDateTime.parse(row.occurredCivil)
+        val corrected = queries.countCorrectionsFor(
+            dedupKey = row.dedupKey,
+            field = CorrectionField.INCLUDE_IN_SPEND.name,
+        ).executeAsOne() > 0
+        val includeInSpend = if (corrected) {
+            row.includeInSpend == 1L
+        } else {
+            SpendPolicy.include(candidate.spendEffect, status)
+        }
+        queries.updateTransactionRevision(
+            accountId = accountId,
+            eventType = candidate.eventType.name,
+            spendEffect = candidate.spendEffect.name,
+            includeInSpend = if (includeInSpend) 1L else 0L,
+            occurredAt = CairoClock.instantFrom(occurredCivil).toEpochMilli(),
+            occurredCivil = occurredCivil.toString(),
+            occurredSource = occurredSource.name,
+            balanceMinor = candidate.balance?.amountMinor ?: row.balanceMinor,
+            balanceCurrency = candidate.balance?.currency?.code ?: row.balanceCurrency,
+            pipelineVersion = PipelineMetadata.VERSION,
+            revision = revision,
+            id = row.transactionId,
+        )
+        val changed = accountId != row.accountId ||
+            candidate.eventType.name != row.eventType ||
+            candidate.spendEffect.name != row.spendEffect ||
+            (if (includeInSpend) 1L else 0L) != row.includeInSpend ||
+            occurredCivil.toString() != row.occurredCivil
+        return changed
+    }
+
+    private fun accountFor(
+        row: SelectRevisableTransactions,
+        mask: String?,
+        kind: AccountKind?,
+        newAccountId: () -> String,
+    ): String? {
+        if (mask.isNullOrBlank() || kind == null) return null
+        val queries = database.expenseQueries
+        val existing = queries.selectAccountId(
+            institutionId = row.institutionId,
+            kind = kind.name,
+            mask = mask,
+        ).executeAsOneOrNull()
+        if (existing != null) return existing
+        return newAccountId().also { id ->
+            queries.insertAccount(
+                id = id,
+                institutionId = row.institutionId,
+                kind = kind.name,
+                mask = mask,
+                currency = row.currency,
+                displayName = "",
+            )
         }
     }
 
@@ -942,7 +1065,8 @@ class SqlDelightLedgerRepository(
             smsId = tx.smsId,
             institutionId = tx.institutionId,
             accountId = tx.accountId,
-            kind = tx.kind.name,
+            eventType = tx.eventType.name,
+            spendEffect = tx.spendEffect.name,
             status = tx.status.name,
             amountMinor = tx.amount.amountMinor,
             amountCurrency = tx.amount.currency.code,
@@ -968,6 +1092,7 @@ class SqlDelightLedgerRepository(
             installmentIndex = tx.installmentIndex?.toLong(),
             installmentCount = tx.installmentCount?.toLong(),
             manual = if (tx.manual) 1L else 0L,
+            revision = PipelineMetadata.VERSION,
         )
     }
 
@@ -989,6 +1114,17 @@ class SqlDelightLedgerRepository(
         val fields: MutableSet<SearchField>,
         var sortAt: Long,
     )
+
+    /**
+     * Rows written before the reading was stored carry no event type. They are
+     * unknown rather than non-financial, and a revision pass replaces the value
+     * with a real reading.
+     */
+    private fun eventTypeOf(stored: String?): FinancialEventType {
+        if (stored.isNullOrBlank()) return FinancialEventType.OTHER_FINANCIAL
+        return runCatching { FinancialEventType.valueOf(stored) }
+            .getOrDefault(FinancialEventType.OTHER_FINANCIAL)
+    }
 
     private fun money(minor: Long?, code: String?): Money? {
         if (minor == null || code == null) return null

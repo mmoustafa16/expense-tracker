@@ -67,11 +67,8 @@ class ExpenseTrackerApplication : Application() {
         if (!session.isUnlocked()) return
         if (!scanGate.tryStart()) return
         try {
-            val reclassified = reclassifyStoredMessages()
-            val relinked = session.relinkStoredAccounts()
-            val cursor = session.inboxCursor()?.let { (receivedAt, providerId) ->
-                InboxCursor(receivedAt, providerId)
-            }
+            val revised = reviseStoredReadings()
+            val cursor = session.inboxWatermark()?.let(::InboxCursor)
             var ingested = false
             session.ingest(access.inboxSource(cursor)) { tally ->
                 ingested = true
@@ -81,7 +78,7 @@ class ExpenseTrackerApplication : Application() {
                 )
             }
             scanGate.finish()
-            if (reclassified || relinked > 0 || ingested) {
+            if (revised || ingested) {
                 val generation = inboxScanState.value.generation + 1
                 inboxScanState.value = InboxScan(
                     phase = InboxScanPhase.FINISHED,
@@ -99,10 +96,21 @@ class ExpenseTrackerApplication : Application() {
         }
     }
 
-    private fun reclassifyStoredMessages(): Boolean {
+    /**
+     * Brings stored readings onto the current pipeline: review rows are read
+     * again and posted rows are enriched in place.
+     *
+     * Both halves run. Reclassifying only review rows leaves every transaction
+     * that posted under an older reading frozen with it, which is why a card the
+     * old instrument matcher could not see never appeared on an existing row.
+     * Each half is idempotent, so repeating the pass changes nothing.
+     */
+    private fun reviseStoredReadings(): Boolean {
         if (!session.isUnlocked()) return false
         val prefs = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE)
-        if (prefs.getInt(CLASSIFICATION_REVISION_KEY, 0) >= CLASSIFICATION_REVISION) return false
+        val pending = prefs.getInt(CLASSIFICATION_REVISION_KEY, 0) < CLASSIFICATION_REVISION
+        val revised = session.reviseStoredTransactions()
+        if (!pending) return revised > 0
         session.reclassifyRetained()
         prefs.edit().putInt(CLASSIFICATION_REVISION_KEY, CLASSIFICATION_REVISION).apply()
         return true
@@ -111,6 +119,6 @@ class ExpenseTrackerApplication : Application() {
     private companion object {
         const val SETUP_PREFS = "expense_setup"
         const val CLASSIFICATION_REVISION_KEY = "classification_revision"
-        const val CLASSIFICATION_REVISION = 5
+        const val CLASSIFICATION_REVISION = 6
     }
 }

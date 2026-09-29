@@ -53,7 +53,24 @@ data class AnalyticsReport(
     val categories: List<CategoryTotal>,
     val merchants: List<MerchantTotal>,
     val transactionCount: Int,
-)
+    /** Ledger rows in this slice that are excluded from spending. */
+    val excludedTransactionCount: Int,
+) {
+    /**
+     * Names the population the totals were taken over.
+     *
+     * Analytics sums spend transactions, which is a narrower set than the ledger
+     * holds: a settled card balance, a transfer, and a voided row are all ledger
+     * rows that spending must not include. Saying so is why two screens can show
+     * different numbers and both be right.
+     */
+    fun population(): String {
+        val spending = "$transactionCount spend ${if (transactionCount == 1) "transaction" else "transactions"}"
+        if (excludedTransactionCount == 0) return spending
+        return "$spending · $excludedTransactionCount ledger " +
+            (if (excludedTransactionCount == 1) "row" else "rows") + " excluded from spending"
+    }
+}
 
 /**
  * Spend totals read from a ledger snapshot. Parent rows include descendant
@@ -79,12 +96,14 @@ object SpendAnalytics {
         val tree = CategoryOptions.tree(state.categories)
         val base = state.transactions.filter { matches(it, slice) }
         val scoped = applyCategory(base, tree, slice.categoryId)
+        val excluded = state.transactions.filter { !it.includeInSpend && inSlice(it, slice) }
         val showMerchants = slice.categoryId != null || slice.merchantId != null || slice.transactionId != null
         return AnalyticsReport(
             totals = sumByCurrency(scoped),
             categories = categoryRows(tree, base, slice.categoryId),
             merchants = if (showMerchants) merchantRows(state, scoped) else emptyList(),
             transactionCount = scoped.size,
+            excludedTransactionCount = excluded.size,
         )
     }
 
@@ -167,6 +186,11 @@ object SpendAnalytics {
 
     private fun matches(transaction: Transaction, slice: AnalyticsSlice): Boolean {
         if (!transaction.includeInSpend) return false
+        return inSlice(transaction, slice)
+    }
+
+    /** Slice filters without the spend rule, so excluded rows can be counted. */
+    private fun inSlice(transaction: Transaction, slice: AnalyticsSlice): Boolean {
         val spendMonth = SpendPolicy.spendMonth(transaction)
         if (slice.month != null && spendMonth != slice.month) return false
         if (slice.month == null && slice.year != null && spendMonth.year != slice.year) return false

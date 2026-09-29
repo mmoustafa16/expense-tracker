@@ -1,5 +1,7 @@
 package expense.intelligence
 
+import expense.parse.FinancialEventType
+
 /**
  * On-device summary of ingested messages, grouped by sender.
  *
@@ -26,8 +28,8 @@ class SenderDiscoveryDiagnostic(
             if (body == null) {
                 bucket.classes.merge(NOT_RETAINED, 1, Int::plus)
             } else {
-                val type = intelligence.assess(SmsText(sender, body)).classification.type
-                bucket.classes.merge(type.diagnosticLabel(), 1, Int::plus)
+                val eventType = intelligence.assess(SmsText(sender, body)).classification.eventType
+                bucket.classes.merge(eventType.diagnosticLabel(), 1, Int::plus)
             }
         }
         val senders = grouped.values.map { it.freeze() }.sortedWith(
@@ -128,18 +130,22 @@ object MessageFingerprint {
     private val balanceCue = Regex("""(?i)\bbalance\b|الرصيد""")
 }
 
-fun TransactionClass.diagnosticLabel(): String = when (this) {
-    TransactionClass.CARD_PURCHASE -> "purchase"
-    TransactionClass.TRANSFER -> "transfer"
-    TransactionClass.CASH_WITHDRAWAL -> "withdrawal"
-    TransactionClass.REFUND -> "refund"
-    TransactionClass.REVERSAL -> "reversal"
-    TransactionClass.FEE -> "fee"
-    TransactionClass.PAYMENT -> "payment"
-    TransactionClass.BALANCE_NOTIFICATION -> "balance"
-    TransactionClass.STATEMENT -> "statement"
-    TransactionClass.PAYMENT_DUE -> "payment_due"
-    TransactionClass.OTP -> "otp"
-    TransactionClass.PROMOTION -> "promotion"
-    TransactionClass.OTHER_NON_TRANSACTION -> "other"
+fun FinancialEventType.diagnosticLabel(): String = when (this) {
+    FinancialEventType.CARD_PURCHASE -> "purchase"
+    FinancialEventType.BANK_TRANSFER -> "transfer"
+    FinancialEventType.CASH_WITHDRAWAL -> "withdrawal"
+    FinancialEventType.CREDIT_CARD_PAYMENT -> "card_payment"
+    FinancialEventType.BILL_PAYMENT -> "payment"
+    FinancialEventType.REFUND -> "refund"
+    FinancialEventType.REVERSAL -> "reversal"
+    FinancialEventType.FEE -> "fee"
+    FinancialEventType.INSTALLMENT -> "installment"
+    FinancialEventType.INCOME -> "income"
+    FinancialEventType.BALANCE_NOTIFICATION -> "balance"
+    FinancialEventType.STATEMENT -> "statement"
+    FinancialEventType.PAYMENT_DUE -> "payment_due"
+    FinancialEventType.FAILED_TRANSACTION -> "failed"
+    FinancialEventType.DECLINED_TRANSACTION -> "declined"
+    FinancialEventType.OTHER_FINANCIAL -> "other_financial"
+    FinancialEventType.NOT_FINANCIAL -> "not_financial"
 }

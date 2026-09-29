@@ -25,24 +25,35 @@ object InboxQuery {
     const val DATE: String = "date"
 
     val projection: Array<String> = arrayOf(ID, ADDRESS, BODY, DATE)
-    const val sortOrder: String = "$DATE ASC, $ID ASC"
+
+    /**
+     * Provider row order, which is arrival order. Ordering by date instead would
+     * interleave rows whose network timestamp is wrong and make the position of
+     * a partly read page meaningless.
+     */
+    const val sortOrder: String = "$ID ASC"
 }
 
 /**
- * Last inbox row that was stored with a provider id.
- * The next sync reads only rows that sort after this pair.
+ * Highest provider row id this device has already stored.
+ *
+ * The provider assigns ids in arrival order and never reuses one, so it is the
+ * only field in an inbox row that is monotonic. A message's `date` comes from
+ * the network: two messages can share one, and a sender or a carrier can stamp
+ * one that is hours or days off. A cursor built on `date` therefore skips any
+ * message whose timestamp sorts below a row already stored, and that message is
+ * never read again no matter how many times the inbox is synced.
+ *
+ * Reading by id alone means a message is read exactly once. Protection against
+ * re-ingesting the same text stays where it belongs, on the stored provider id
+ * and the body hash.
  */
 data class InboxCursor(
-    val receivedAtMillis: Long,
     val providerMessageId: Long,
 ) {
-    fun selection(): String = "(${InboxQuery.DATE} > ?) OR (${InboxQuery.DATE} = ? AND ${InboxQuery.ID} > ?)"
+    fun selection(): String = "${InboxQuery.ID} > ?"
 
-    fun args(): Array<String> = arrayOf(
-        receivedAtMillis.toString(),
-        receivedAtMillis.toString(),
-        providerMessageId.toString(),
-    )
+    fun args(): Array<String> = arrayOf(providerMessageId.toString())
 }
 
 object InboxSmsConverter {

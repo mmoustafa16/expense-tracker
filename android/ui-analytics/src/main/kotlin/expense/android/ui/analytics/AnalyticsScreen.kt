@@ -109,7 +109,7 @@ fun AnalyticsScreen(
                     Text(MoneyFormat.format(total.signedMinor, total.currency), style = MaterialTheme.typography.titleLarge)
                 }
             }
-            Text("${report.transactionCount} transactions")
+            Text(report.population())
         }
         item { HorizontalDivider() }
         item { Text("Categories", style = MaterialTheme.typography.titleMedium) }

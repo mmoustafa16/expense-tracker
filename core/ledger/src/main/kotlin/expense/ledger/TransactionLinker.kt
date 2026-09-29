@@ -1,12 +1,13 @@
 package expense.ledger
 
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 
 object TransactionLinker {
-    private val originalKinds = setOf(
-        TransactionKind.PURCHASE,
-        TransactionKind.INSTALLMENT,
-        TransactionKind.CASH_WITHDRAWAL,
+    private val originatingEvents = setOf(
+        FinancialEventType.CARD_PURCHASE,
+        FinancialEventType.INSTALLMENT,
+        FinancialEventType.CASH_WITHDRAWAL,
+        FinancialEventType.BILL_PAYMENT,
     )
 
     fun findOriginal(
@@ -18,7 +19,7 @@ object TransactionLinker {
         return transactions.find { tx ->
             tx.institutionId == institutionId &&
                 tx.reference == reference &&
-                tx.kind in originalKinds
+                tx.eventType in originatingEvents
         }
     }
 }

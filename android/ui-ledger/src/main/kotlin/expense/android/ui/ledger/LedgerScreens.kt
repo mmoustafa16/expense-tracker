@@ -330,7 +330,7 @@ fun TransactionRoute(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(transactionTitle(loaded, transaction), style = MaterialTheme.typography.headlineSmall)
-        Text("${transaction.direction.name.lowercase()} · ${transaction.kind.name.lowercase().replace('_', ' ')}")
+        Text("${transaction.direction.name.lowercase()} · ${transaction.eventType.name.lowercase().replace('_', ' ')}")
         Text(transaction.occurredCivil.format(WHEN))
         message?.let { Text(it) }
         OutlinedTextField(
@@ -512,7 +512,7 @@ private fun CategoryEditor(
 private fun TransactionRow(transaction: Transaction, onOpen: () -> Unit) {
     TextButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
-            Text(transaction.merchantRaw ?: transaction.kind.name.lowercase())
+            Text(transaction.merchantRaw ?: transaction.eventType.name.lowercase())
             Text("${MoneyFormat.format(transaction.amount)} · ${transaction.direction.name.lowercase()}")
         }
     }
