@@ -434,6 +434,7 @@ AND NOT EXISTS (
 
 selectOpenReviewPage:
 SELECT a.id AS attemptId, a.sms_id AS smsId, a.status AS status, a.pipeline_version AS pipelineVersion,
+  a.error AS holdReason,
   s.sender AS sender, s.body AS body, s.received_at AS receivedAt
 FROM parse_attempt a
 INNER JOIN stored_sms s ON s.id = a.sms_id

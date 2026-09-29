@@ -6,14 +6,15 @@ package expense.intelligence
  * then [TransactionValidator], then a [ClassificationDecision].
  *
  * Classification and extraction run even when discovery returns unknown.
- * A ledger post still requires a [VerifiedSenderRegistry] hit plus a validated
- * high-confidence transaction. Evidence, metadata, and a user confirmation
- * can name an institution, and an unknown or ambiguous result stays in review.
+ * A ledger post needs one verified institution plus a validated high-confidence
+ * transaction. The institution comes from an explicit sender record, public
+ * metadata, or the sender channel itself. A handset number, an ambiguous
+ * claim, and an incomplete transaction stay in review.
  *
  * The default classifier is the bundled on-device semantic model.
  * [replacing] swaps that model without changing discovery, validation, or the ledger.
  * This type does not call a cloud model or send the SMS anywhere.
- * Institutions are [InstitutionBootstrap] records, not branches in this class.
+ * Institutions are discovered data, not branches in this class.
  */
 class FinancialSmsIntelligence(
     private val discovery: BankDiscovery,
@@ -51,17 +52,8 @@ class FinancialSmsIntelligence(
         if (!complete) {
             return if (classification.type.isLedgerCandidate()) ConfidenceLevel.MEDIUM else ConfidenceLevel.LOW
         }
-        if (needsCounterparty(classification.type) && entities.merchant.isNullOrBlank() && entities.accountMask.isNullOrBlank()) {
-            return ConfidenceLevel.MEDIUM
-        }
         if (discovered.verifiedInstitution == null) return ConfidenceLevel.MEDIUM
         return ConfidenceLevel.HIGH
-    }
-
-    private fun needsCounterparty(type: TransactionClass): Boolean {
-        return type == TransactionClass.CARD_PURCHASE ||
-            type == TransactionClass.REFUND ||
-            type == TransactionClass.PAYMENT
     }
 
     private fun directionFor(type: TransactionClass, body: String): MoneyDirection? {
@@ -114,6 +106,7 @@ class FinancialSmsIntelligence(
                         UserConfirmedSenders(userConfirmed),
                         OnDeviceModelDiscovery(),
                         LocalLearnedPatterns(),
+                        InstitutionalSenderDiscovery(),
                     ),
                 ),
                 classifier = classifier,
@@ -121,5 +114,24 @@ class FinancialSmsIntelligence(
                 validator = DeterministicTransactionValidator(),
             )
         }
+    }
+}
+
+/**
+ * Why a ledger candidate was not posted. Null when the message is not a
+ * transaction or when it is postable. The labels are structural, not bank names.
+ */
+fun ClassificationDecision.reviewHold(): String? {
+    if (!classification.type.isLedgerCandidate() || postable) return null
+    if (classification.ambiguous) return "ambiguous_meaning"
+    if (entities.amountRole == AmountRole.AMBIGUOUS) return "ambiguous_amount"
+    if (entities.amount == null || entities.amountRole != AmountRole.TRANSACTION) return "amount_missing"
+    if (!validation.accepted || validation.forcesReview) return "validation"
+    if (classification.confidence < FinancialSmsIntelligence.HIGH_CONFIDENCE) return "low_confidence"
+    return when (discovery.status) {
+        DiscoveryStatus.AMBIGUOUS -> "ambiguous_institution"
+        DiscoveryStatus.UNKNOWN -> "unknown_institution"
+        DiscoveryStatus.KNOWN ->
+            if (discovery.verifiedInstitution == null) "unverified_institution" else "not_postable"
     }
 }

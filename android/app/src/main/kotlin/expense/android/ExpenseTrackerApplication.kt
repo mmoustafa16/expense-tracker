@@ -9,6 +9,7 @@ import expense.android.storage.LedgerSessions
 import expense.android.storage.UnlockPrompt
 import expense.android.storage.UnlockResult
 import expense.ingest.IngestTally
+import expense.ingest.SemanticsWarmup
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -27,6 +28,14 @@ class ExpenseTrackerApplication : Application() {
     private val inboxScanState = MutableStateFlow(InboxScan())
 
     val inboxScan: StateFlow<InboxScan> = inboxScanState
+
+    override fun onCreate() {
+        super.onCreate()
+        Thread({ SemanticsWarmup.start() }, "semantic-model").apply {
+            isDaemon = true
+            start()
+        }
+    }
 
     val smsIngestion: InboundSmsSink = InboundSmsSink { messages ->
         session.accept(messages)
@@ -52,8 +61,7 @@ class ExpenseTrackerApplication : Application() {
 
     fun scanInboxIfGranted() {
         if (inboxScanned()) {
-            reclassifyStoredMessages()
-            publishStoredSummary()
+            if (reclassifyStoredMessages()) publishStoredSummary()
             return
         }
         val access = SmsAccess(this)
@@ -88,12 +96,13 @@ class ExpenseTrackerApplication : Application() {
         inboxScanState.value = InboxScan(phase = InboxScanPhase.FINISHED, tally = session.storedTally())
     }
 
-    private fun reclassifyStoredMessages() {
-        if (!session.isUnlocked()) return
+    private fun reclassifyStoredMessages(): Boolean {
+        if (!session.isUnlocked()) return false
         val prefs = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE)
-        if (prefs.getInt(CLASSIFICATION_REVISION_KEY, 0) >= CLASSIFICATION_REVISION) return
+        if (prefs.getInt(CLASSIFICATION_REVISION_KEY, 0) >= CLASSIFICATION_REVISION) return false
         session.reclassifyRetained()
         prefs.edit().putInt(CLASSIFICATION_REVISION_KEY, CLASSIFICATION_REVISION).apply()
+        return true
     }
 
     private fun inboxScanned(): Boolean {
@@ -104,6 +113,6 @@ class ExpenseTrackerApplication : Application() {
         const val SETUP_PREFS = "expense_setup"
         const val INBOX_SCANNED = "inbox_scanned"
         const val CLASSIFICATION_REVISION_KEY = "classification_revision"
-        const val CLASSIFICATION_REVISION = 3
+        const val CLASSIFICATION_REVISION = 4
     }
 }

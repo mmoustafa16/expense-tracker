@@ -4,9 +4,8 @@ import expense.money.Currency
 import expense.money.DigitFold
 import expense.money.Money
 import expense.money.MoneyText
+import java.time.DateTimeException
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 
 class DeterministicEntityExtractor : FinancialEntityExtractor {
     override fun extract(message: SmsText): ExtractedEntities {
@@ -55,6 +54,7 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
         val currencyToken: String,
         val balance: Boolean,
         val start: Int,
+        val end: Int,
     )
 
     private fun findAmounts(folded: String): List<FoundAmount> {
@@ -66,12 +66,18 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
                 val currency = currencyOf(currencyToken) ?: return@forEach
                 val money = MoneyText.parse(numberToken, currency) ?: return@forEach
                 val start = hit.range.first
-                val windowStart = (start - 40).coerceAtLeast(0)
-                val prefix = folded.substring(windowStart, start)
-                found += FoundAmount(money, numberToken, currency, currencyToken, balanceCue.containsMatchIn(prefix), start)
+                found += FoundAmount(
+                    money, numberToken, currency, currencyToken,
+                    balance = false, start = start, end = hit.range.last + 1,
+                )
             }
         }
-        return found.distinctBy { it.start }
+        val ordered = found.distinctBy { it.start }.sortedBy { it.start }
+        return ordered.mapIndexed { index, item ->
+            val previous = if (index == 0) 0 else ordered[index - 1].end
+            val between = folded.substring(previous, item.start)
+            item.copy(balance = balanceCue.containsMatchIn(between))
+        }
     }
 
     private fun currencyOf(token: String): Currency? {
@@ -105,13 +111,49 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
     }
 
     private fun findOccurred(folded: String): LocalDateTime? {
-        val match = occurredPattern.find(folded) ?: return null
-        val time = match.groupValues[2]
-        if (time.isBlank()) return null
+        numericDate.find(folded)?.let { match ->
+            return civil(
+                day = match.groupValues[1].toInt(),
+                month = match.groupValues[2].toInt(),
+                year = expandYear(match.groupValues[3].toInt()),
+                time = match.groupValues[4],
+            )
+        }
+        namedDate.find(folded)?.let { match ->
+            val month = months[match.groupValues[2].lowercase().take(3)] ?: return null
+            return civil(
+                day = match.groupValues[1].toInt(),
+                month = month,
+                year = match.groupValues[3].toInt(),
+                time = match.groupValues[4],
+            )
+        }
+        return null
+    }
+
+    private fun civil(day: Int, month: Int, year: Int, time: String): LocalDateTime? {
+        val hour: Int
+        val minute: Int
+        if (time.isBlank()) {
+            hour = 0
+            minute = 0
+        } else {
+            val parts = time.split(':')
+            hour = parts[0].toInt()
+            minute = parts[1].toInt()
+        }
         return try {
-            LocalDateTime.parse("${match.groupValues[1]} $time", civilTime)
-        } catch (_: DateTimeParseException) {
+            LocalDateTime.of(year, month, day, hour, minute)
+        } catch (_: DateTimeException) {
             null
+        }
+    }
+
+    private fun expandYear(year: Int): Int {
+        return when {
+            year >= 100 -> year
+            year >= 70 -> 1900 + year
+            else -> 2000 + year
         }
     }
 
@@ -124,15 +166,27 @@ class DeterministicEntityExtractor : FinancialEntityExtractor {
             AmountPattern(Regex("""([0-9]+(?:[.,][0-9]+)*)\s*(جنيه|دولار|يورو)"""), currencyGroup = 2, numberGroup = 1),
         )
         val merchantPattern = Regex(
-            """(?i)(?:\b(?:at|from|by)\b|عند|لدى)\s+([A-Za-z][A-Za-z0-9&'.-]*(?:\s+[A-Za-z][A-Za-z0-9&'.-]*)?)""",
+            """(?i)(?:\b(?:at|from|by|to)\b|عند|لدى)\s+([A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9&'.-]*(?:\s+[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF0-9&'.-]*)?)""",
         )
-        val merchantStops = setOf("on", "ref", "reference", "available", "balance", "for", "with", "card", "ending")
+        val merchantStops = setOf(
+            "on", "ref", "reference", "available", "balance", "for", "with", "card", "ending",
+            "your", "the", "a", "an", "another", "this", "that", "was", "is", "has",
+        )
         val maskPattern = Regex(
             """(?i)\b(?:card|account|acct)\s+ending(?:\s+with)?\s+\**(\d{4})\b|\bending(?:\s+with)?\s+\**(\d{4})\b|\b(?:card|account|acct)\s*#+\s*(\d{4})\b""",
         )
         val referencePattern = Regex("""(?i)\bref(?:erence)?[:\s#-]+([A-Za-z0-9]{2,})""")
-        val occurredPattern = Regex("""\b(\d{2}/\d{2}/\d{4})(?:\s+(\d{2}:\d{2}))?\b""")
-        val civilTime: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")
+        val numericDate = Regex(
+            """\b(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?:\s+at)?(?:\s+(\d{1,2}:\d{2}))?\b""",
+            RegexOption.IGNORE_CASE,
+        )
+        val namedDate = Regex(
+            """(?i)\b(\d{1,2})\s+((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\s+(\d{4})(?:\s+at)?(?:\s+(\d{1,2}:\d{2}))?\b""",
+        )
+        val months = mapOf(
+            "jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6,
+            "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
+        )
     }
 }
 

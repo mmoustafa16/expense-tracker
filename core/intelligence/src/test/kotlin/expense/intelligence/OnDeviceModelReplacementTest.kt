@@ -29,7 +29,7 @@ class OnDeviceModelReplacementTest {
 
     @Test
     fun `a replacement model understands an unverified bank and cannot post`() {
-        val unknown = FinancialSmsIntelligence.replacing(classifier, extractor).assess(SmsText("FERRY", body))
+        val unknown = FinancialSmsIntelligence.replacing(classifier, extractor).assess(SmsText("01005551234", body))
         assertEquals(TransactionClass.CARD_PURCHASE, unknown.classification.type)
         assertEquals(93, unknown.classification.confidence)
         assertEquals(Money(6420, Currency.EGP), unknown.entities.amount)

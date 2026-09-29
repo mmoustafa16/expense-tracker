@@ -78,7 +78,7 @@ class UnknownBankDiscoveryTest {
     @Test
     fun `the same purchase is understood whether or not the institution is known`() {
         val body = "Your card was used for EGP 450 at Talabat"
-        val unknown = intelligence.assess(SmsText("UNREGISTERED", body))
+        val unknown = intelligence.assess(SmsText("01005550000", body))
         val known = FinancialSmsIntelligence.deterministic(
             listOf(RegisteredSender("example.test-bank", "Example Test Bank", setOf("TESTBANK"))),
         ).assess(SmsText("TESTBANK", body))
@@ -98,7 +98,7 @@ class UnknownBankDiscoveryTest {
             institutionId = "example.hint-bank",
             displayName = "Hint Bank",
             confidence = 70,
-            source = DiscoverySourceKind.PUBLIC_BANK_METADATA,
+            source = DiscoverySourceKind.ON_DEVICE_MODEL,
             verified = true,
         )
         val hinted = FinancialSmsIntelligence(
@@ -108,7 +108,7 @@ class UnknownBankDiscoveryTest {
                     OnDeviceModelDiscovery(),
                     LocalLearnedPatterns(),
                     object : BankDiscoverySource {
-                        override val kind = DiscoverySourceKind.PUBLIC_BANK_METADATA
+                        override val kind = DiscoverySourceKind.ON_DEVICE_MODEL
                         override fun discover(message: SmsText) = listOf(hint)
                     },
                 ),
@@ -147,6 +147,6 @@ class UnknownBankDiscoveryTest {
     }
 
     private fun assess(body: String): ClassificationDecision {
-        return intelligence.assess(SmsText("UNREGISTERED", body))
+        return intelligence.assess(SmsText("01005550000", body))
     }
 }

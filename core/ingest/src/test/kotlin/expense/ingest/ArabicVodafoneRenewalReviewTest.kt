@@ -63,18 +63,22 @@ class ArabicVodafoneRenewalReviewTest {
     }
 
     @Test
-    fun `an arabic completed card purchase from an unknown sender stays in review`() {
+    fun `an arabic completed card purchase posts for an institutional sender and stays in review for a handset`() {
         val open = IngestPipeline(ids = RenewalIds())
         val purchase = open.ingest(message("VF-EG", arabicPurchase, "purchase"))
-        assertEquals(ParseStatus.UNSUPPORTED, purchase.status)
-        assertEquals(1, purchase.state.reviewQueue().size)
-        assertEquals(arabicPurchase, purchase.state.messages.single().body)
-        assertTrue(purchase.state.transactions.isEmpty())
+        assertEquals(ParseStatus.PARSED, purchase.status)
+        assertTrue(purchase.posted)
+        assertEquals("vfeg", purchase.state.transactions.single().institutionId)
+        assertTrue(purchase.state.reviewQueue().isEmpty())
         val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("VF-EG", arabicPurchase))
         assertEquals("card_purchase", decision.classification.semantics?.intent)
         assertTrue(decision.classification.semantics!!.transactionCompleted)
         assertTrue(decision.classification.semantics!!.moneyMovement)
         assertTrue(decision.classification.type.isLedgerCandidate())
+        val handset = open.ingest(message("01005551234", arabicPurchase, "handset"))
+        assertEquals(ParseStatus.UNSUPPORTED, handset.status)
+        assertEquals("unknown_institution", handset.attempt?.error)
+        assertTrue(handset.state.transactions.isEmpty())
     }
 
     private fun message(sender: String, body: String, id: String): InboundSms {

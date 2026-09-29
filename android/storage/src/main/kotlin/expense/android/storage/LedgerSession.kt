@@ -59,6 +59,9 @@ class LedgerSession(
     private var repository: SqlDelightLedgerRepository? = null
     private val pendingMessages = mutableListOf<InboundSms>()
     private val pendingSources = mutableListOf<SmsSource>()
+    private var screenCache: LedgerState? = null
+    private var reviewCacheKey: Pair<Int, Int>? = null
+    private var reviewCache: ReviewWindow? = null
 
     fun isUnlocked(): Boolean = synchronized(lock) { passphrase != null }
 
@@ -155,7 +158,21 @@ class LedgerSession(
     }
 
     fun reviewWindow(offset: Int, limit: Int): ReviewWindow {
-        return synchronized(lock) { repositoryLocked().reviewWindow(offset, limit) }
+        return synchronized(lock) {
+            val key = offset to limit
+            val cached = reviewCache
+            if (reviewCacheKey == key && cached != null) return cached
+            val window = repositoryLocked().reviewWindow(offset, limit)
+            reviewCacheKey = key
+            reviewCache = window
+            window
+        }
+    }
+
+    fun peekReview(offset: Int, limit: Int): ReviewWindow? {
+        return synchronized(lock) {
+            reviewCache?.takeIf { reviewCacheKey == offset to limit }
+        }
     }
 
     fun snapshot(matches: List<SearchMatch>): LedgerState {
@@ -166,7 +183,7 @@ class LedgerSession(
 
     fun reclassifyRetained(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE, maxPages: Int = Int.MAX_VALUE): Int {
         return synchronized(lock) {
-            repositoryLocked().reclassifyRetained(
+            val visited = repositoryLocked().reclassifyRetained(
                 pageSize = pageSize,
                 maxPages = maxPages,
                 pipelineVersion = PipelineMetadata.VERSION,
@@ -176,10 +193,19 @@ class LedgerSession(
                     pipeline.postStored(state, message, checkNotNull(decision.profile), checkNotNull(decision.extraction))
                 },
             )
+            invalidateCaches()
+            visited
         }
     }
 
     fun load(): LedgerState = synchronized(lock) { repositoryLocked().load() }
+
+    /** Ledger, review navigation, and analytics. Does not read SMS bodies. */
+    fun screen(): LedgerState = synchronized(lock) {
+        screenCache ?: repositoryLocked().screenProjection().also { screenCache = it }
+    }
+
+    fun peekScreen(): LedgerState? = synchronized(lock) { screenCache }
 
     fun search(query: String): List<SearchMatch> = synchronized(lock) { repositoryLocked().search(query) }
 
@@ -200,7 +226,16 @@ class LedgerSession(
     fun postManual(draft: ManualDraft): LedgerState = edit { ManualLedger.post(it, draft, ids::newId) }
 
     private fun edit(transform: (LedgerState) -> LedgerState): LedgerState {
-        return synchronized(lock) { repositoryLocked().update(transform) }
+        return synchronized(lock) {
+            invalidateCaches()
+            repositoryLocked().update(transform)
+        }
+    }
+
+    private fun invalidateCaches() {
+        screenCache = null
+        reviewCache = null
+        reviewCacheKey = null
     }
 
     private fun flushLocked() {
@@ -226,7 +261,10 @@ class LedgerSession(
                 cursor = result.state
                 pageTally = pageTally.add(result)
             }
-            synchronized(lock) { repositoryLocked().append(before, cursor) }
+            synchronized(lock) {
+                repositoryLocked().append(before, cursor)
+                invalidateCaches()
+            }
             working = cursor.withoutMessageBodies()
             tally += pageTally
             onPage(tally)
@@ -238,6 +276,7 @@ class LedgerSession(
         repositoryLocked().update { state ->
             pipeline.ingestAll(SmsSource { messages }, state)
         }
+        invalidateCaches()
     }
 
     private fun repositoryLocked(): SqlDelightLedgerRepository {

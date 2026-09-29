@@ -26,4 +26,5 @@ enum class AccountKind {
     WALLET,
     PREPAID,
     MEEZA,
+    CARD,
 }

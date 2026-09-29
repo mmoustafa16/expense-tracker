@@ -191,10 +191,9 @@ fun ExpenseApp(
                     session = application.ledger(),
                     refreshEpoch = epoch,
                     scan = scan.summary(),
+                    showSenderDiagnostic = DeveloperTools.SENDER_DIAGNOSTIC,
                     onOpenSearch = { nav.navigate(Routes.Search) },
-                    onOpenAccount = { nav.navigate(Routes.account(it)) },
                     onOpenTransaction = { nav.navigate(Routes.transaction(it)) },
-                    onOpenCategories = { nav.navigate(Routes.Categories) },
                     onOpenSenderDiagnostic = { nav.navigate(Routes.SenderDiagnostic) },
                 )
             }
@@ -225,6 +224,7 @@ fun ExpenseApp(
                         session = application.ledger(),
                         transactionId = transactionId,
                         onOpenAnalytics = { nav.navigate(Routes.analytics(it)) },
+                        onOpenCategories = { nav.navigate(Routes.Categories) },
                     )
                 }
             }
@@ -304,3 +304,8 @@ private val destinations = listOf(
 )
 
 private val TOP_LEVEL = destinations.map { it.route }.toSet()
+
+/** Sender diagnostic stays in the app for development and is not on the ledger. */
+internal object DeveloperTools {
+    const val SENDER_DIAGNOSTIC: Boolean = false
+}

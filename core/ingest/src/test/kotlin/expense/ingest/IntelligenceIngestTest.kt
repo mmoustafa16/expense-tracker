@@ -31,7 +31,7 @@ class IntelligenceIngestTest {
     fun `an unknown bank purchase is understood and stays in review`() {
         val pipeline = IngestPipeline(ids = IntelligenceIds())
         val body = "Your card was used for EGP 450 at Talabat"
-        val first = pipeline.ingest(sms("1", body))
+        val first = pipeline.ingest(sms("1", body, sender = "01005551234"))
         assertEquals(ParseStatus.UNSUPPORTED, first.status)
         assertFalse(first.posted)
         assertTrue(first.state.transactions.isEmpty())

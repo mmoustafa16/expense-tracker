@@ -21,34 +21,39 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 
 /**
- * A bank that is not on the current device. No parser is written for it.
- * The shared pipeline understands the message and holds it until the sender
- * is added as a verified record.
+ * No parser is written for a new institution.
+ * An alphanumeric sender is verified from the channel. A handset number is not.
  */
 class SyntheticUnknownBankTest {
     private val sender = "FERRY"
     private val body = "Spent EGP 64.20 at Harbor Cafe"
 
     @Test
-    fun `a synthetic unknown bank is understood and stays in review until verified`() {
+    fun `an institutional sender posts without a manual record and a handset stays in review`() {
         assertTrue(InstitutionBootstrap.records.none { sender in it.senderIds })
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
         val understood = FinancialSmsIntelligence.deterministic().assess(SmsText(sender, body))
-        assertEquals(DiscoveryStatus.UNKNOWN, understood.discovery.status)
+        assertEquals(DiscoveryStatus.KNOWN, understood.discovery.status)
+        assertEquals("ferry", understood.discovery.verifiedInstitution?.institutionId)
+        assertEquals("FERRY", understood.discovery.verifiedInstitution?.displayName)
         assertEquals(TransactionClass.CARD_PURCHASE, understood.classification.type)
         assertEquals(Money(6420, Currency.EGP), understood.entities.amount)
-        assertEquals(Currency.EGP, understood.entities.currency)
         assertEquals("Harbor Cafe", understood.entities.merchant)
-        assertFalse(understood.postable)
+        assertTrue(understood.postable)
 
         val pipeline = IngestPipeline(ids = FerryIds())
-        val held = pipeline.ingest(sms("ferry-held"))
-        assertEquals(ParseStatus.UNSUPPORTED, held.status)
-        assertFalse(held.posted)
-        assertNull(held.attempt?.templateId)
-        assertTrue(held.state.transactions.isEmpty())
-        assertEquals(1, held.state.reviewQueue().size)
-        assertEquals(body, held.state.messages.single().body)
+        val postedChannel = pipeline.ingest(sms("ferry-held"))
+        assertEquals(ParseStatus.PARSED, postedChannel.status)
+        assertTrue(postedChannel.posted)
+        assertEquals("ferry", postedChannel.state.transactions.single().institutionId)
+
+        val handset = pipeline.ingest(
+            InboundSms(sender = "01005551234", body = body, providerMessageId = "handset", receivedAt = Instant.parse("2026-04-04T08:00:00Z")),
+            postedChannel.state,
+        )
+        assertEquals(ParseStatus.UNSUPPORTED, handset.status)
+        assertEquals("unknown_institution", handset.attempt?.error)
+        assertEquals(1, handset.state.reviewQueue().size)
 
         val verified = FinancialSmsIntelligence.deterministic(
             listOf(RegisteredSender("example.ferry-bank", "Ferry Bank", setOf(sender))),
@@ -57,14 +62,12 @@ class SyntheticUnknownBankTest {
         assertEquals(ParseStatus.PARSED, posted.status)
         assertTrue(posted.posted)
         assertNull(posted.attempt?.templateId)
-        assertFalse(posted.matchedProfile)
         val transaction = posted.state.transactions.single()
         assertEquals("example.ferry-bank", transaction.institutionId)
         assertEquals(TransactionKind.PURCHASE, transaction.kind)
         assertEquals(Money(6420, Currency.EGP), transaction.amount)
         assertEquals("Harbor Cafe", transaction.merchantRaw)
         assertTrue(posted.state.reviewQueue().isEmpty())
-        assertTrue(InstitutionBootstrap.records.none { sender in it.senderIds })
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
     }
 

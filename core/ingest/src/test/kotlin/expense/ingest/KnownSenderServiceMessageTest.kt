@@ -59,7 +59,8 @@ class KnownSenderServiceMessageTest {
         assertEquals(known.classification.type, unknown.classification.type)
         assertEquals(DiscoveryStatus.KNOWN, known.discovery.status)
         assertEquals("example.vodafone-cash", known.discovery.verifiedInstitution?.institutionId)
-        assertEquals(DiscoveryStatus.UNKNOWN, unknown.discovery.status)
+        assertEquals(DiscoveryStatus.KNOWN, unknown.discovery.status)
+        assertEquals("vodafone", unknown.discovery.verifiedInstitution?.institutionId)
         assertFalse(known.postable)
         assertFalse(unknown.postable)
     }
@@ -118,8 +119,9 @@ class KnownSenderServiceMessageTest {
         assertNull(recharge.state.messages.single().body)
         assertTrue(recharge.state.reviewQueue().isEmpty())
 
-        val purchase = open.ingest(message("NEWS", "Your card was used for EGP 450 at Talabat", "n2"))
+        val purchase = open.ingest(message("01005551234", "Your card was used for EGP 450 at Talabat", "n2"))
         assertEquals(ParseStatus.UNSUPPORTED, purchase.status)
+        assertEquals("unknown_institution", purchase.attempt?.error)
         assertFalse(purchase.posted)
         assertEquals(1, purchase.state.reviewQueue().size)
         assertTrue(purchase.state.transactions.isEmpty())

@@ -39,7 +39,7 @@ class UiSessionTest {
         session.accept(
             listOf(
                 InboundSms(
-                    sender = "LAB",
+                    sender = "01005551234",
                     body = "Debited EGP 20.00 for Shop",
                     providerMessageId = "1",
                     receivedAt = Instant.parse("2026-05-01T07:00:00Z"),
@@ -107,7 +107,7 @@ class UiSessionTest {
         session.accept(
             listOf(
                 InboundSms(
-                    sender = "LAB",
+                    sender = "01005551234",
                     body = "Paid EGP 5.00 somewhere",
                     providerMessageId = "2",
                     receivedAt = Instant.parse("2026-05-04T07:00:00Z"),
@@ -125,7 +125,7 @@ class UiSessionTest {
         session.accept(
             listOf(
                 InboundSms(
-                    sender = "SHOP",
+                    sender = "01005559876",
                     body = "Your card was used for EGP 450 at Talabat",
                     providerMessageId = "c1",
                     receivedAt = Instant.parse("2026-03-02T07:15:00Z"),

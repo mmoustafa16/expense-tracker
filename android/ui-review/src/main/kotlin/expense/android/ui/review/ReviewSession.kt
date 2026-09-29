@@ -9,8 +9,15 @@ object ReviewSession {
 
     fun rows(session: LedgerSession): List<ReviewRow> = ReviewQueue.rows(session.load())
 
+    fun peek(session: LedgerSession, offset: Int): ReviewPage? {
+        return session.peekReview(offset, ReviewQueue.PAGE_SIZE)?.let(::toPage)
+    }
+
     fun page(session: LedgerSession, offset: Int): ReviewPage {
-        val window = session.reviewWindow(offset, ReviewQueue.PAGE_SIZE)
+        return toPage(session.reviewWindow(offset, ReviewQueue.PAGE_SIZE))
+    }
+
+    private fun toPage(window: expense.android.storage.ReviewWindow): ReviewPage {
         return ReviewPage(
             rows = window.rows.map { row ->
                 ReviewRow(
@@ -21,6 +28,7 @@ object ReviewSession {
                     receivedAt = row.receivedAt,
                     body = row.body,
                     pipelineVersion = row.pipelineVersion,
+                    reason = row.holdReason,
                 )
             },
             offset = window.offset,
@@ -34,7 +42,7 @@ object ReviewSession {
 
     fun dismissPage(session: LedgerSession, attemptId: String, offset: Int): ReviewPage {
         session.dismissReview(attemptId)
-        return ReviewQueue.page(session.load(), offset)
+        return page(session, offset)
     }
 
     fun post(session: LedgerSession, draft: ManualDraft): List<ReviewRow> {

@@ -53,7 +53,7 @@ class BankEvidenceCollectorTest {
                 LocalInstitutionEvidence("example.evidence-bank", "Evidence Bank", setOf("EVIDENCEBANK")),
             ),
         )
-        val decision = intelligence.assess(SmsText("SOMEONE", purchase))
+        val decision = intelligence.assess(SmsText("01005551234", purchase))
         assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status)
         assertTrue(decision.discovery.candidates.isEmpty())
         assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
@@ -131,8 +131,9 @@ class BankEvidenceCollectorTest {
             ),
         )
         val prose = intelligence.assess(SmsText("PIPEBANK", purchase))
-        assertEquals(DiscoveryStatus.UNKNOWN, prose.discovery.status)
-        assertFalse(prose.postable)
+        assertEquals(DiscoveryStatus.KNOWN, prose.discovery.status)
+        assertEquals("pipebank", prose.discovery.verifiedInstitution?.institutionId)
+        assertTrue(prose.postable)
 
         val structured = intelligence.assess(SmsText("PIPEBANK", "TB|purchase|EGP|10.00|Shop"))
         val institution = structured.discovery.candidates.single()

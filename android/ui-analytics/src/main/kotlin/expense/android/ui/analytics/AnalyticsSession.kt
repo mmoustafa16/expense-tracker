@@ -4,9 +4,9 @@ import expense.android.storage.LedgerSession
 import expense.ledger.LedgerState
 
 object AnalyticsSession {
-    fun load(session: LedgerSession): LedgerState = session.load()
+    fun load(session: LedgerSession): LedgerState = session.screen()
 
     fun report(session: LedgerSession, slice: AnalyticsSlice): AnalyticsReport {
-        return SpendAnalytics.report(session.load(), slice)
+        return SpendAnalytics.report(session.screen(), slice)
     }
 }

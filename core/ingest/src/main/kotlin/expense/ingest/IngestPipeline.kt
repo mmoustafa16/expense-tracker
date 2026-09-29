@@ -14,6 +14,7 @@ import expense.intelligence.FinancialSmsIntelligence
 import expense.intelligence.InstitutionBootstrap
 import expense.intelligence.MoneyDirection
 import expense.intelligence.RegisteredSender
+import expense.intelligence.reviewHold
 import expense.intelligence.SmsText
 import expense.intelligence.TransactionClass
 import expense.parse.AccountKind
@@ -41,11 +42,15 @@ import expense.sms.SmsSource
 class IngestPipeline(
     private val registry: BankRegistry = BankRegistry.EMPTY,
     private val ids: IdGenerator = UuidIdGenerator,
-    private val intelligence: FinancialSmsIntelligence = FinancialSmsIntelligence.deterministic(
-        registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) } +
-            InstitutionBootstrap.records,
-    ),
+    intelligence: FinancialSmsIntelligence? = null,
 ) {
+    private val suppliedIntelligence = intelligence
+    private val intelligence: FinancialSmsIntelligence by lazy {
+        suppliedIntelligence ?: FinancialSmsIntelligence.deterministic(
+            registry.profiles.map { RegisteredSender(it.id, it.displayName, it.senderIds) } +
+                InstitutionBootstrap.records,
+        )
+    }
     private val matcher = BankMatcher(registry)
     private val poster = LedgerPoster(ids)
 
@@ -259,7 +264,12 @@ class IngestPipeline(
             )
         }
         if (assessment.classification.type.isLedgerCandidate()) {
-            return Interpretation(status = ParseStatus.UNSUPPORTED, retainBody = true, profile = profile)
+            return Interpretation(
+                status = ParseStatus.UNSUPPORTED,
+                retainBody = true,
+                profile = profile,
+                error = assessment.reviewHold(),
+            )
         }
         return Interpretation(status = ParseStatus.IGNORED_NOT_BANK, retainBody = false, profile = profile)
     }
@@ -302,6 +312,7 @@ class IngestPipeline(
             Regex("""(?i)\bcredit card\b""").containsMatchIn(body) -> AccountKind.CREDIT_CARD
             Regex("""(?i)\bdebit card\b""").containsMatchIn(body) -> AccountKind.DEBIT_CARD
             Regex("""(?i)\baccount\b""").containsMatchIn(body) -> AccountKind.ACCOUNT
+            Regex("""(?i)\bcard\b""").containsMatchIn(body) -> AccountKind.CARD
             else -> null
         }
         return Extraction(

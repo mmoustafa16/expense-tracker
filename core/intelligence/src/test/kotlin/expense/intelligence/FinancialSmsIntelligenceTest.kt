@@ -16,29 +16,33 @@ class FinancialSmsIntelligenceTest {
     )
 
     @Test
-    fun `an unregistered sender stays unknown`() {
-        listOf("ALEXBANK", "Vodafone", "VodafoneCash", "SOMEBANK").forEach { sender ->
+    fun `a handset number stays unknown and an alphanumeric sender is its own institution`() {
+        assertTrue(InstitutionBootstrap.records.isEmpty())
+        assertTrue(InstitutionCatalog.bundled().isEmpty())
+        val handset = intelligence.assess(SmsText("01005551234", "Charged EGP 10.00 at Shop"))
+        assertEquals(DiscoveryStatus.UNKNOWN, handset.discovery.status)
+        assertTrue(handset.discovery.candidates.isEmpty())
+        assertFalse(handset.postable)
+        listOf("CIB", "ALEXBANK", "VodafoneCash").forEach { sender ->
             val decision = intelligence.assess(SmsText(sender, "Charged EGP 10.00 at Shop"))
-            assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status, sender)
-            assertTrue(decision.discovery.candidates.isEmpty(), sender)
-            assertNull(decision.discovery.verifiedInstitution, sender)
-            assertFalse(decision.postable, sender)
+            assertEquals(DiscoveryStatus.KNOWN, decision.discovery.status, sender)
+            assertEquals(senderInstitutionId(sender), decision.discovery.verifiedInstitution?.institutionId, sender)
+            assertEquals(sender, decision.discovery.verifiedInstitution?.displayName, sender)
+            assertEquals(DiscoverySourceKind.INSTITUTIONAL_SENDER, decision.discovery.verifiedInstitution?.source, sender)
+            assertTrue(decision.postable, sender)
         }
     }
 
     @Test
-    fun `the device sender CIB is the only verified institution and can post`() {
-        assertEquals(listOf("CIB"), InstitutionBootstrap.records.flatMap { it.senderIds })
+    fun `sender CIB is verified from the channel and a different address is a different institution`() {
         val decision = intelligence.assess(SmsText("CIB", "Charged EGP 10.00 at Shop"))
-        assertEquals(DiscoveryStatus.KNOWN, decision.discovery.status)
         assertEquals("cib", decision.discovery.verifiedInstitution?.institutionId)
         assertEquals("CIB", decision.discovery.verifiedInstitution?.displayName)
-        assertTrue(decision.discovery.verifiedInstitution!!.verified)
-        assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
         assertTrue(decision.postable)
-        val stranger = intelligence.assess(SmsText("CIB-EG", "Charged EGP 10.00 at Shop"))
-        assertEquals(DiscoveryStatus.UNKNOWN, stranger.discovery.status)
-        assertFalse(stranger.postable)
+        val other = intelligence.assess(SmsText("CIB-EG", "Charged EGP 10.00 at Shop"))
+        assertEquals("cibeg", other.discovery.verifiedInstitution?.institutionId)
+        assertEquals("CIB-EG", other.discovery.verifiedInstitution?.displayName)
+        assertTrue(other.postable)
     }
 
     @Test
@@ -47,7 +51,7 @@ class FinancialSmsIntelligenceTest {
         assertEquals(DiscoveryStatus.KNOWN, identified.discovery.status)
         assertEquals("example.test-bank", identified.discovery.verifiedInstitution?.institutionId)
         assertEquals(90, identified.discovery.candidates.single().confidence)
-        val stranger = intelligence.assess(SmsText("SOMEBANK", "Charged EGP 10.00 at Shop"))
+        val stranger = intelligence.assess(SmsText("01005551234", "Charged EGP 10.00 at Shop"))
         assertEquals(DiscoveryStatus.UNKNOWN, stranger.discovery.status)
         assertTrue(stranger.discovery.candidates.isEmpty())
     }
@@ -82,7 +86,7 @@ class FinancialSmsIntelligenceTest {
             assertEquals(ConfidenceLevel.MEDIUM, decision.level)
             assertFalse(decision.postable)
         }
-        assertNull(first.entities.occurredAt)
+        assertEquals(LocalDateTime.of(2026, 1, 15, 0, 0), first.entities.occurredAt)
         val posted = verified.assess(SmsText("TESTBANK", "Purchase of EGP 120.50 from Talabat"))
         assertEquals(ConfidenceLevel.HIGH, posted.level)
         assertTrue(posted.postable)

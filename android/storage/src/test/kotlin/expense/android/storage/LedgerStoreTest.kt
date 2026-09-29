@@ -279,13 +279,14 @@ class LedgerRepositoryTest {
         assertEquals(charged, loaded.messages.single { it.id == "charged" }.body)
         assertEquals(parsed, loaded.messages.single { it.id == "parsed" }.body)
         assertEquals(ParseStatus.IGNORED_NOT_BANK, loaded.attempts.single { it.smsId == "promo" }.status)
-        assertEquals(ParseStatus.UNSUPPORTED, loaded.attempts.single { it.smsId == "charged" }.status)
+        assertEquals(ParseStatus.PARSED, loaded.attempts.single { it.smsId == "charged" }.status)
         assertEquals(PipelineMetadata.VERSION, loaded.attempts.single { it.smsId == "charged" }.pipelineVersion)
+        assertEquals(1, loaded.transactions.size)
         assertEquals(ParseStatus.PARSED, loaded.attempts.single { it.smsId == "parsed" }.status)
         assertEquals("1", loaded.attempts.single { it.smsId == "parsed" }.pipelineVersion)
-        assertEquals(1, repository.reviewWindow(0, 20).total)
+        assertEquals(0, repository.reviewWindow(0, 20).total)
         assertEquals(2, repository.storedTally().financial)
-        assertEquals(1, repository.storedTally().unsupported)
+        assertEquals(0, repository.storedTally().unsupported)
         assertEquals(0, reclassify(repository, pageSize = 1))
         assertEquals(loaded.attempts.map { it.status }, repository.load().attempts.map { it.status })
     }
@@ -468,7 +469,7 @@ class DatabaseRetentionTest {
         val opened = AtomicInteger()
         var prompts = 0
         val session = session(databaseFile, ScriptedVault(KeyMaterial.Available(byteArrayOf(1, 2, 3))), opened)
-        val financial = InboundSms("LAB", "Debited EGP 20.00 for Shop", "11", Instant.parse("2026-05-01T07:00:00Z"))
+        val financial = InboundSms("01005551234", "Debited EGP 20.00 for Shop", "11", Instant.parse("2026-05-01T07:00:00Z"))
         val ignored = InboundSms("NEWS", "hello there", "12", Instant.parse("2026-05-01T08:00:00Z"))
         session.accept(listOf(financial))
         assertEquals(0, opened.get())
@@ -541,7 +542,7 @@ class DatabaseRetentionTest {
             override fun forEachPage(pageSize: Int, accept: (List<InboundSms>) -> Unit) {
                 val items = (0 until total).map { index ->
                     InboundSms(
-                        sender = "LAB",
+                        sender = "01005551234",
                         body = "Debited EGP $index for Shop",
                         providerMessageId = index.toString(),
                         receivedAt = Instant.EPOCH.plusSeconds(index.toLong()),

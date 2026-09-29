@@ -44,7 +44,7 @@ fun AnalyticsRoute(
     refreshEpoch: Int,
     initialTransactionId: String?,
 ) {
-    var loaded by remember { mutableStateOf<LedgerState?>(null) }
+    var loaded by remember { mutableStateOf(session.peekScreen()) }
     var slice by remember(initialTransactionId) { mutableStateOf(AnalyticsSlice(transactionId = initialTransactionId)) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(refreshEpoch) {

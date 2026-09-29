@@ -32,12 +32,12 @@ class AccountTransferReviewTest {
         )
         val pipeline = IngestPipeline(ids = TransferIds())
         bodies.forEachIndexed { index, body ->
-            val result = pipeline.ingest(message("UNVERIFIED", body, "t$index"))
+            val result = pipeline.ingest(message("01005551234", body, "t$index"))
             assertEquals(ParseStatus.UNSUPPORTED, result.status, body)
             assertEquals(1, result.state.reviewQueue().size, body)
             assertEquals(body, result.state.messages.single().body, body)
             assertTrue(result.state.transactions.isEmpty(), body)
-            val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("UNVERIFIED", body))
+            val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("01005551234", body))
             assertEquals("transfer_out", decision.classification.semantics?.intent, body)
             assertTrue(decision.classification.semantics!!.transactionCompleted, body)
             assertTrue(decision.classification.semantics!!.moneyMovement, body)
@@ -49,11 +49,11 @@ class AccountTransferReviewTest {
     @Test
     fun `an account credit from a transfer stays in review for an unknown sender`() {
         val body = "Your account was credited with amount EGP 120.00CR on 02 APR 2024 from a transfer by another account."
-        val result = IngestPipeline(ids = TransferIds()).ingest(message("UNVERIFIED", body, "credit"))
+        val result = IngestPipeline(ids = TransferIds()).ingest(message("01005551234", body, "credit"))
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
         assertEquals(1, result.state.reviewQueue().size)
         assertTrue(result.state.transactions.isEmpty())
-        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("UNVERIFIED", body))
+        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("01005551234", body))
         assertEquals("transfer_in", decision.classification.semantics?.intent)
         assertEquals(MoneyDirection.CREDIT, decision.classification.semantics!!.direction)
     }
@@ -61,11 +61,11 @@ class AccountTransferReviewTest {
     @Test
     fun `an account purchase that also quotes available balance stays in review`() {
         val body = "Your account ending with ****2219 is debited with amount EGP 54.00DR on 04 APR 2024 for a purchase at the market."
-        val result = IngestPipeline(ids = TransferIds()).ingest(message("UNVERIFIED", body, "purchase"))
+        val result = IngestPipeline(ids = TransferIds()).ingest(message("01005551234", body, "purchase"))
         assertEquals(ParseStatus.UNSUPPORTED, result.status)
         assertEquals(1, result.state.reviewQueue().size)
         assertTrue(result.state.transactions.isEmpty())
-        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("UNVERIFIED", body))
+        val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("01005551234", body))
         assertEquals("card_purchase", decision.classification.semantics?.intent)
         assertEquals(MoneyDirection.DEBIT, decision.classification.semantics!!.direction)
     }
@@ -86,6 +86,7 @@ class AccountTransferReviewTest {
         assertEquals("cib", transferAccount.institutionId)
         assertEquals(AccountKind.ACCOUNT, transferAccount.kind)
         assertEquals("9438", transferAccount.mask)
+        assertEquals(java.time.LocalDateTime.of(2024, 3, 31, 0, 0), transferTx.occurredCivil)
 
         val purchase = pipeline.ingest(message("CIB", card, "card"), transfer.state)
         assertEquals(ParseStatus.PARSED, purchase.status)
@@ -98,6 +99,7 @@ class AccountTransferReviewTest {
         val cardAccount = purchase.state.accounts.single { it.kind == AccountKind.CREDIT_CARD }
         assertEquals("cib", cardAccount.institutionId)
         assertEquals("0019", cardAccount.mask)
+        assertEquals(java.time.LocalDateTime.of(2024, 3, 30, 20, 19), purchaseTx.occurredCivil)
         assertEquals(setOf("9438", "0019"), purchase.state.accounts.map { it.mask }.toSet())
     }
 

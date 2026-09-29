@@ -12,6 +12,7 @@ data class ReviewRow(
     val receivedAt: Instant,
     val body: String?,
     val pipelineVersion: String,
+    val reason: String? = null,
 )
 
 data class ReviewPage(
@@ -45,6 +46,7 @@ object ReviewQueue {
                 receivedAt = sms?.receivedAt ?: Instant.EPOCH,
                 body = sms?.body,
                 pipelineVersion = attempt.pipelineVersion,
+                reason = attempt.error,
             )
         }
         return ReviewPage(rows = rows, offset = start, total = queued.size)
@@ -55,6 +57,20 @@ object ReviewQueue {
         val requested = offset.coerceAtLeast(0)
         if (requested < total) return requested
         return ((total - 1) / pageSize) * pageSize
+    }
+
+    fun holdLabel(reason: String): String {
+        return when (reason) {
+            "ambiguous_meaning" -> "Ambiguous transaction"
+            "ambiguous_amount" -> "More than one amount"
+            "amount_missing" -> "Amount not found"
+            "validation" -> "Validation failed"
+            "low_confidence" -> "Low confidence"
+            "ambiguous_institution" -> "Ambiguous institution"
+            "unknown_institution" -> "Unknown institution"
+            "unverified_institution" -> "Unverified institution"
+            else -> reason
+        }
     }
 
     fun statusLabel(status: ParseStatus): String {

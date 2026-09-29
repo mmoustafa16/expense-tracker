@@ -75,12 +75,37 @@ class SqlDelightLedgerRepository(
         return read(messages)
     }
 
-    private fun read(messages: List<StoredSms>): LedgerState {
+    /**
+     * Accounts, transactions, merchants, categories, and sender addresses.
+     * SMS bodies, parse attempts, and extraction rows stay in the database.
+     */
+    fun screenProjection(): LedgerState {
+        val messages = database.expenseQueries.selectWorkingMessages().executeAsList().map { row ->
+            StoredSms(
+                id = row.id,
+                sender = row.sender,
+                body = null,
+                bodyHash = row.bodyHash,
+                providerMessageId = row.providerMessageId,
+                receivedAt = Instant.ofEpochMilli(row.receivedAt),
+            )
+        }
+        return read(messages, history = false)
+    }
+
+    private fun read(messages: List<StoredSms>, history: Boolean = true): LedgerState {
         val queries = database.expenseQueries
-        val candidates = queries.selectCandidates().executeAsList().groupBy { it.attemptId }
+        val candidates = if (history) {
+            queries.selectCandidates().executeAsList().groupBy { it.attemptId }
+        } else {
+            emptyMap()
+        }
         return LedgerState(
             messages = messages,
-            attempts = queries.selectAttempts().executeAsList().map { row ->
+            attempts = if (!history) {
+                emptyList()
+            } else {
+                queries.selectAttempts().executeAsList().map { row ->
                 val rows = candidates[row.id].orEmpty()
                 val extraction = row.confidence?.let { confidence ->
                     Extraction(
@@ -115,6 +140,7 @@ class SqlDelightLedgerRepository(
                     extraction = extraction,
                     error = row.error,
                 )
+                }
             },
             accounts = queries.selectAccounts().executeAsList().map { row ->
                 Account(
@@ -528,6 +554,7 @@ class SqlDelightLedgerRepository(
                 receivedAt = Instant.ofEpochMilli(row.receivedAt),
                 body = row.body,
                 pipelineVersion = row.pipelineVersion,
+                holdReason = row.holdReason,
             )
         }
         return ReviewWindow(rows, start, total)

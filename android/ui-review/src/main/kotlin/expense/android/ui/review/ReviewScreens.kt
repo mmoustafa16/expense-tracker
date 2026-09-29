@@ -52,14 +52,14 @@ fun ReviewRoute(
     refreshEpoch: Int,
     onEnterManual: (String) -> Unit,
 ) {
-    var page by remember { mutableStateOf(ReviewPage(emptyList(), 0, 0)) }
+    var page by remember { mutableStateOf(ReviewSession.peek(session, 0) ?: ReviewPage(emptyList(), 0, 0)) }
     var offset by remember { mutableStateOf(0) }
-    var loading by remember { mutableStateOf(true) }
+    var loading by remember { mutableStateOf(page.rows.isEmpty()) }
     var message by remember { mutableStateOf<String?>(null) }
     var pendingDismiss by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(refreshEpoch, offset) {
-        loading = true
+        if (page.rows.isEmpty()) loading = true
         try {
             page = withContext(Dispatchers.IO) { ReviewSession.page(session, offset) }
             offset = page.offset
@@ -132,11 +132,14 @@ fun ReviewScreen(
             ListItem(
                 headlineContent = { Text("${ReviewQueue.statusLabel(row.status)} · ${row.sender}") },
                 supportingContent = {
-                    Text(
-                        row.body.orEmpty(),
-                        maxLines = 6,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column {
+                        row.reason?.let { Text(ReviewQueue.holdLabel(it), style = MaterialTheme.typography.labelMedium) }
+                        Text(
+                            row.body.orEmpty(),
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 },
             )
             if (pendingDismiss == row.attemptId) {
@@ -330,6 +333,7 @@ private fun AccountKind.readable(): String {
         AccountKind.WALLET -> "Wallet"
         AccountKind.PREPAID -> "Prepaid"
         AccountKind.MEEZA -> "Meeza"
+        AccountKind.CARD -> "Card"
     }
 }
 

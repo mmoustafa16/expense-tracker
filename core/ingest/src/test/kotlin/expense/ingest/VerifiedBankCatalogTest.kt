@@ -17,7 +17,7 @@ class VerifiedBankCatalogTest {
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
         val result = IngestPipeline(VerifiedBankCatalog.registry()).ingest(
             InboundSms(
-                sender = "OTHER",
+                sender = "01005551234",
                 body = "Debited EGP 20.00 for Shop",
                 providerMessageId = "1",
                 receivedAt = Instant.parse("2026-01-15T08:00:00Z"),

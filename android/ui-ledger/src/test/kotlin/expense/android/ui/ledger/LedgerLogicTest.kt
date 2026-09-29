@@ -7,6 +7,7 @@ import expense.categories.CategorySource
 import expense.ledger.Account
 import expense.ledger.LedgerState
 import expense.ledger.OccurredSource
+import expense.ledger.StoredSms
 import expense.ledger.Transaction
 import expense.ledger.TransactionStatus
 import expense.money.Currency
@@ -85,6 +86,31 @@ class LedgerLogicTest {
         assertEquals(custom.sortOrder, updated.value.sortOrder)
         assertTrue(CategoryDrafts.update(CategorySeed.all.first(), "Food", "طعام", null, emptyList()) is UiResult.Rejected)
         assertTrue(CategoryDrafts.add("Pets", "حيوانات", "Pets", null, emptyList()) is UiResult.Rejected)
+    }
+
+    @Test
+    fun `the ledger view is transaction first and names the active filter`() {
+        val account = Account("acct-1", "cib", AccountKind.CREDIT_CARD, "0019", Currency.EGP)
+        val state = LedgerState(
+            accounts = listOf(account),
+            messages = listOf(StoredSms("sms-t-named", "CIB", null, "hash", null, Instant.parse("2026-05-01T08:00:00Z"))),
+            transactions = listOf(tx("t-named", "cib", "acct-1")),
+        )
+        val all = LedgerCards.view(state, month = null, accountId = null)
+        assertEquals("All transactions", all.scopeLabel)
+        val card = all.cards.single()
+        assertEquals("Shop", card.title)
+        assertEquals("EGP 20.00 · Debit", card.amountLine)
+        assertEquals("CIB · Credit card · ••••0019", card.channelLine)
+        assertEquals("1 May 2026 · 10:00", card.whenLine)
+        assertEquals("Shopping", card.category)
+        val month = java.time.YearMonth.of(2026, 5)
+        assertEquals("May 2026", LedgerCards.scopeLabel(state, month, null))
+        assertEquals(
+            "May 2026 · CIB · Credit card · ••••0019",
+            LedgerCards.scopeLabel(state, month, account.id),
+        )
+        assertTrue(LedgerCards.view(state, java.time.YearMonth.of(2026, 4), null).cards.isEmpty())
     }
 
     private fun tx(id: String, institutionId: String, accountId: String?): Transaction {

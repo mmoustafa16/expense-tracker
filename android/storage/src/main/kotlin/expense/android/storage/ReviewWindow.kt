@@ -11,6 +11,7 @@ data class ReviewRecord(
     val receivedAt: Instant,
     val body: String?,
     val pipelineVersion: String,
+    val holdReason: String? = null,
 )
 
 data class ReviewWindow(

@@ -14,10 +14,18 @@ enum class DiscoverySourceKind {
     USER_CONFIRMED_SENDER,
     ON_DEVICE_MODEL,
     LOCAL_LEARNED_PATTERN,
+    INSTITUTIONAL_SENDER,
     ;
 
-    /** The verified sender registry is the only source that may authorize a ledger post. */
-    fun authorizesLedger(): Boolean = this == VERIFIED_SENDER_REGISTRY
+    /**
+     * A ledger post needs one authorizing source.
+     * Evidence, a user confirmation, a model hint, and a learned pattern can name
+     * a candidate. They cannot authorize the post by themselves.
+     */
+    fun authorizesLedger(): Boolean = when (this) {
+        VERIFIED_SENDER_REGISTRY, PUBLIC_BANK_METADATA, INSTITUTIONAL_SENDER -> true
+        BANK_EVIDENCE, USER_CONFIRMED_SENDER, ON_DEVICE_MODEL, LOCAL_LEARNED_PATTERN -> false
+    }
 }
 
 enum class DiscoveryStatus {
@@ -108,14 +116,92 @@ class VerifiedSenderRegistry(
 }
 
 /**
- * Placeholder for official or public bank metadata.
- * Empty until a verified metadata set exists. This type does not fetch anything.
+ * Exact sender match against [InstitutionCatalog] or an injected record list.
+ * A match is data. It does not parse the SMS. Nothing is fetched.
  */
-class PublicBankMetadata : BankDiscoverySource {
+class PublicBankMetadata(
+    private val records: List<RegisteredSender> = InstitutionCatalog.bundled(),
+) : BankDiscoverySource {
     override val kind: DiscoverySourceKind = DiscoverySourceKind.PUBLIC_BANK_METADATA
 
-    override fun discover(message: SmsText): List<DiscoveredInstitution> = emptyList()
+    override fun discover(message: SmsText): List<DiscoveredInstitution> {
+        val trimmed = message.sender.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        return records.filter { record -> record.senderIds.any { it.trim() == trimmed } }.map { record ->
+            DiscoveredInstitution(
+                institutionId = record.institutionId,
+                displayName = record.displayName,
+                confidence = METADATA_CONFIDENCE,
+                source = kind,
+                verified = true,
+                evidence = listOf(MatchedEvidence(EvidenceKind.SENDER_ALIAS, trimmed)),
+            )
+        }
+    }
+
+    private companion object {
+        const val METADATA_CONFIDENCE: Int = 90
+    }
 }
+
+/**
+ * Identifies an institution from the sender channel itself.
+ *
+ * An alphanumeric sender id or a short code is one institution: the address
+ * that actually sent the SMS. The display name is that address. A handset
+ * number, a blank sender, and a one- or two-character token are ambiguous and
+ * produce no institution. This type does not read a bank list and does not
+ * parse the message body.
+ */
+class InstitutionalSenderDiscovery : BankDiscoverySource {
+    override val kind: DiscoverySourceKind = DiscoverySourceKind.INSTITUTIONAL_SENDER
+
+    override fun discover(message: SmsText): List<DiscoveredInstitution> {
+        val sender = message.sender.trim()
+        if (!isInstitutionalChannel(sender)) return emptyList()
+        val id = senderInstitutionId(sender)
+        if (id.length < MIN_ID_LENGTH) return emptyList()
+        return listOf(
+            DiscoveredInstitution(
+                institutionId = id,
+                displayName = sender,
+                confidence = CHANNEL_CONFIDENCE,
+                source = kind,
+                verified = true,
+                evidence = listOf(
+                    MatchedEvidence(EvidenceKind.SENDER_ALIAS, sender),
+                    MatchedEvidence(EvidenceKind.SENDER_SHAPE, senderAddressShape(sender).name),
+                ),
+            ),
+        )
+    }
+
+    private companion object {
+        const val CHANNEL_CONFIDENCE: Int = 90
+        const val MIN_ID_LENGTH: Int = 3
+    }
+}
+
+/**
+ * A dedicated sender channel is an institution. A person's phone number is not.
+ */
+fun isInstitutionalChannel(sender: String): Boolean {
+    val trimmed = sender.trim()
+    return when (senderAddressShape(trimmed)) {
+        SenderAddressShape.ALPHANUMERIC_ID ->
+            trimmed.length in ALPHANUMERIC_LENGTH && trimmed.any { it.isLetter() }
+        SenderAddressShape.SHORT_CODE -> trimmed.length in SHORT_CODE_CHANNEL
+        SenderAddressShape.BLANK, SenderAddressShape.LONG_NUMBER, SenderAddressShape.OTHER -> false
+    }
+}
+
+/** Stable id shared by the same address in any letter case. Not a legal name. */
+fun senderInstitutionId(sender: String): String {
+    return sender.trim().lowercase().filter { it.isLetterOrDigit() }
+}
+
+private val ALPHANUMERIC_LENGTH: IntRange = 3..32
+private val SHORT_CODE_CHANNEL: IntRange = 4..6
 
 data class UserConfirmedSender(
     val institutionId: String,
@@ -175,8 +261,10 @@ class LocalLearnedPatterns : BankDiscoverySource {
 
 /**
  * Runs every [BankDiscoverySource] and merges institution ids.
- * Only a [VerifiedSenderRegistry] hit can stay verified. Evidence, metadata,
- * a model, a learned pattern, or a user confirmation cannot.
+ *
+ * A registry record, public metadata, or another explicit claim wins over the
+ * sender-channel fallback. The fallback is used only when nothing else names
+ * this sender. Two different claims stay ambiguous and cannot post.
  */
 class CompositeBankDiscovery(
     private val sources: List<BankDiscoverySource>,
@@ -196,7 +284,9 @@ class CompositeBankDiscovery(
                 evidence = hits.flatMap { it.evidence }.distinct(),
             )
         }.sortedByDescending { it.confidence }
-        val status = if (merged.size == 1) DiscoveryStatus.KNOWN else DiscoveryStatus.AMBIGUOUS
-        return BankDiscoveryResult(status, merged)
+        val claimed = merged.filterNot { it.source == DiscoverySourceKind.INSTITUTIONAL_SENDER }
+        val chosen = if (claimed.isNotEmpty()) claimed else merged
+        val status = if (chosen.size == 1) DiscoveryStatus.KNOWN else DiscoveryStatus.AMBIGUOUS
+        return BankDiscoveryResult(status, chosen)
     }
 }
