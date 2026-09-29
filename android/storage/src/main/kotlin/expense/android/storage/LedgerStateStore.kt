@@ -742,16 +742,24 @@ class SqlDelightLedgerRepository(
 
     private fun appendInside(previous: LedgerState, next: LedgerState) {
         val queries = database.expenseQueries
-            val previousMessageIds = previous.messages.map { it.id }.toSet()
-            next.messages.filter { it.id !in previousMessageIds }.forEach { sms ->
-                queries.insertSms(
-                    id = sms.id,
-                    sender = sms.sender,
-                    body = sms.body,
-                    bodyHash = sms.bodyHash,
-                    providerMessageId = sms.providerMessageId,
-                    receivedAt = sms.receivedAt.toEpochMilli(),
-                )
+            val previousMessages = previous.messages.associateBy { it.id }
+            next.messages.forEach { sms ->
+                val stored = previousMessages[sms.id]
+                if (stored == null) {
+                    queries.insertSms(
+                        id = sms.id,
+                        sender = sms.sender,
+                        body = sms.body,
+                        bodyHash = sms.bodyHash,
+                        providerMessageId = sms.providerMessageId,
+                        receivedAt = sms.receivedAt.toEpochMilli(),
+                    )
+                } else if (stored.providerMessageId == null && sms.providerMessageId != null) {
+                    // A row stored from a live broadcast has no provider id until the
+                    // inbox sync recognizes its text. Writing the id here is what lets
+                    // the watermark move past it instead of re-reading it forever.
+                    queries.updateSmsProviderId(providerMessageId = sms.providerMessageId, id = sms.id)
+                }
             }
             val previousAttemptIds = previous.attempts.map { it.id }.toSet()
             next.attempts.filter { it.id !in previousAttemptIds }.forEach { attempt ->
@@ -879,10 +887,6 @@ class SqlDelightLedgerRepository(
     /** Highest provider row id stored, or null before the first sync. */
     fun inboxWatermark(): Long? {
         return database.expenseQueries.selectInboxWatermark().executeAsOneOrNull()?.providerMessageId
-    }
-
-    fun adoptProviderId(smsId: String, providerMessageId: String) {
-        database.expenseQueries.updateSmsProviderId(providerMessageId = providerMessageId, id = smsId)
     }
 
     fun senderEvidence(): List<SenderEvidence> {

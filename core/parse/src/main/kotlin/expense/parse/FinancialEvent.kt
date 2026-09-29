@@ -203,11 +203,11 @@ object EventAmounts {
                 }
             }
         }
-        val unnamed = amounts.filter { it.role == AmountRole.UNKNOWN }
-        return if (unnamed.map { it.amount }.distinct().size > 1) {
-            AmountResolution.AMBIGUOUS
-        } else {
-            AmountResolution.MISSING
+        val remaining = fallback(amounts)
+        return when {
+            remaining.map { it.amount }.distinct().size > 1 -> AmountResolution.AMBIGUOUS
+            remaining.isEmpty() -> AmountResolution.MISSING
+            else -> AmountResolution.RESOLVED
         }
     }
 
@@ -215,7 +215,20 @@ object EventAmounts {
         valueRoles.forEach { role ->
             amounts.firstOrNull { it.role == role }?.let { return it }
         }
-        return null
+        return fallback(amounts).firstOrNull()
+    }
+
+    /**
+     * Values the event could be worth once its own roles claim nothing.
+     *
+     * A message may name its value with a role the event type does not prefer: a
+     * charge described as a fee, a settlement described as a payment. Naming it
+     * is more than the message had to do, so the value is still usable, but only
+     * while the candidates agree. Balances, ceilings, and advertised figures are
+     * never candidates, whatever the event type is.
+     */
+    private fun fallback(amounts: List<RoledAmount>): List<RoledAmount> {
+        return amounts.filter { it.role.isEventValue() || it.role == AmountRole.UNKNOWN }
     }
 }
 

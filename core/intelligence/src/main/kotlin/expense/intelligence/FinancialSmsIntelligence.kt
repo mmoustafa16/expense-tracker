@@ -200,6 +200,13 @@ fun interface EventTypeRefiner {
  * Recognizes a credit-card bill payment from the instrument the message names
  * and the settlement vocabulary around it. Both are properties of the message,
  * not of the sender, so any issuer writing the same fact is read the same way.
+ *
+ * How much the message has to state depends on how far the prediction already
+ * is from a settlement. When the label is a payment or a transfer, a credit
+ * instrument as the destination is enough. When the label is something else the
+ * message has to say all three things a settlement says and a purchase does not:
+ * money was repaid, the destination is a credit instrument, and there is no
+ * payee other than that instrument.
  */
 class InstrumentAwareEventTypeRefiner : EventTypeRefiner {
     override fun refine(
@@ -207,23 +214,35 @@ class InstrumentAwareEventTypeRefiner : EventTypeRefiner {
         classification: Classification,
         entities: ExtractedEntities,
     ): Classification {
-        val settles = when (classification.eventType) {
-            FinancialEventType.BILL_PAYMENT, FinancialEventType.BANK_TRANSFER -> true
-            else -> false
+        val eventType = classification.eventType
+        if (eventType == FinancialEventType.CREDIT_CARD_PAYMENT || !eventType.canMoveMoney()) {
+            return classification
         }
-        if (!settles) return classification
         val towardCredit = entities.instrument?.kind?.isCredit() == true
-        val settlementWording = settlementCue.containsMatchIn(message.body)
-        if (!towardCredit && !settlementWording) return classification
+        val settlement = when (eventType) {
+            FinancialEventType.BILL_PAYMENT, FinancialEventType.BANK_TRANSFER ->
+                towardCredit || settlementCue.containsMatchIn(message.body)
+            else ->
+                towardCredit && entities.merchant == null && repaymentCue.containsMatchIn(message.body)
+        }
+        if (!settlement) return classification
         return classification.copy(eventType = FinancialEventType.CREDIT_CARD_PAYMENT)
     }
 
     private companion object {
+        /** The message says outright which liability was settled. */
         val settlementCue = Regex(
             """(?i)\b(?:credit\s*card\s*(?:bill|payment|dues?)|card\s*payment\s*received""" +
                 """|payment\s*(?:to|towards|toward)\s*(?:your\s*)?credit\s*card""" +
                 """|outstanding\s*(?:balance|dues?)\s*(?:paid|settled))\b""" +
                 """|سداد\s*(?:مديونية|بطاقة)|سداد\s*البطاقة|دفع\s*بطاقة\s*الائتمان""",
+        )
+
+        /** Money going back rather than out: repayment vocabulary in either language. */
+        val repaymentCue = Regex(
+            """(?i)\b(?:repaid|repayment|settled|settlement|paid\s*(?:off|towards?|to)""" +
+                """|payment\s*(?:of|received|posted)|received\s*with\s*thanks)\b""" +
+                """|سداد|سدّد|سدد|تسوية|تسديد""",
         )
     }
 }

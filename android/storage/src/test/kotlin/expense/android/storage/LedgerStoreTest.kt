@@ -441,6 +441,78 @@ class LedgerRepositoryTest {
         assertEquals(1, repository.load().accounts.size)
     }
 
+    /**
+     * The upgrade pass runs both halves: review rows are read again and posted
+     * rows are rewritten in place. Running it twice has to leave the same rows,
+     * because on a device it runs on every unlock.
+     */
+    @Test
+    fun `running the whole upgrade pass twice changes nothing the second time`() {
+        val repository = memoryRepository()
+        val held = "Spent EGP 64.20 at Harbor Cafe using card ****4242"
+        val posted = "Your credit card ****4229 was charged EGP 41.76 at Uber"
+        val received = Instant.parse("2026-09-28T17:58:00Z")
+        repository.save(
+            LedgerState(
+                messages = listOf(
+                    StoredSms("held", "CIB", held, BodyHash.sha256(held), "1", received),
+                    StoredSms("posted", "CIB", posted, BodyHash.sha256(posted), "2", received.plusSeconds(60)),
+                ),
+                attempts = listOf(
+                    ParseAttempt(
+                        id = "a-held",
+                        smsId = "held",
+                        pipelineVersion = "1",
+                        profileId = null,
+                        profileVersion = null,
+                        templateId = null,
+                        status = ParseStatus.UNSUPPORTED,
+                        eventType = FinancialEventType.CARD_PURCHASE,
+                        confidence = null,
+                        extraction = null,
+                        error = null,
+                    ),
+                ),
+                transactions = listOf(
+                    sampleTransaction(null).copy(
+                        id = "tx-posted",
+                        dedupKey = "d-posted",
+                        smsId = "posted",
+                        accountId = null,
+                        institutionId = "cib",
+                        merchantId = null,
+                    ),
+                ),
+            ),
+        )
+        val pipeline = establishedPipeline("CIB")
+        val revision = "reading-after-upgrade"
+        val first = upgrade(repository, pipeline, revision)
+        assertTrue(first.first > 0 || first.second > 0)
+        val afterFirst = repository.load()
+        val tally = repository.storedTally()
+
+        assertEquals(0 to 0, upgrade(repository, pipeline, revision))
+        val afterSecond = repository.load()
+        assertEquals(afterFirst.transactions.map { it.id }, afterSecond.transactions.map { it.id })
+        assertEquals(afterFirst.transactions.map { it.dedupKey }, afterSecond.transactions.map { it.dedupKey })
+        assertEquals(afterFirst.transactions.map { it.accountId }, afterSecond.transactions.map { it.accountId })
+        assertEquals(afterFirst.accounts.map { it.id }, afterSecond.accounts.map { it.id })
+        assertEquals(afterFirst.attempts.map { it.status }, afterSecond.attempts.map { it.status })
+        assertEquals(tally, repository.storedTally())
+        assertEquals(setOf("4229", "4242"), afterSecond.accounts.map { it.mask }.toSet())
+    }
+
+    private fun upgrade(
+        repository: SqlDelightLedgerRepository,
+        pipeline: IngestPipeline,
+        revision: String,
+    ): Pair<Int, Int> {
+        val revised = revise(repository, pipeline, revision, "acct-revised")
+        val reclassified = reclassify(repository, pipeline, pageSize = 20)
+        return revised to reclassified
+    }
+
     @Test
     fun `the android session is wired to the verified bank catalog`() {
         val source = File("src/main/kotlin/expense/android/storage/LedgerSessions.kt").readText()
