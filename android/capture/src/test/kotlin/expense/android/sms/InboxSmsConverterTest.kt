@@ -26,10 +26,10 @@ class InboxSmsConverterTest {
     }
 
     @Test
-    fun `the inbox cursor asks only for rows after the stored provider message`() {
-        val cursor = InboxCursor(receivedAtMillis = 1_700_000_000_000, providerMessageId = 88)
-        assertEquals("(date > ?) OR (date = ? AND _id > ?)", cursor.selection())
-        assertEquals(arrayOf("1700000000000", "1700000000000", "88").toList(), cursor.args().toList())
+    fun `the inbox cursor asks only for rows after the stored provider row id`() {
+        val cursor = InboxCursor(providerMessageId = 88)
+        assertEquals("_id > ?", cursor.selection())
+        assertEquals(listOf("88"), cursor.args().toList())
     }
 
     @Test
@@ -64,7 +64,7 @@ class InboxSmsConverterTest {
     @Test
     fun `inbox query reads only the columns needed for an inbound sms`() {
         assertEquals(listOf("_id", "address", "body", "date"), InboxQuery.projection.toList())
-        assertEquals("date ASC, _id ASC", InboxQuery.sortOrder)
+        assertEquals("_id ASC", InboxQuery.sortOrder)
     }
 
     private fun row(id: String, sender: String, body: String, at: Instant): InboxSmsRow {

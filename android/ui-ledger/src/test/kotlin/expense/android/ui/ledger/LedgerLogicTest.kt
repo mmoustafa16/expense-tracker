@@ -14,7 +14,7 @@ import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -120,7 +120,8 @@ class LedgerLogicTest {
             smsId = "sms-$id",
             institutionId = institutionId,
             accountId = accountId,
-            kind = TransactionKind.PURCHASE,
+            eventType = FinancialEventType.CARD_PURCHASE,
+            spendEffect = FinancialEventType.CARD_PURCHASE.defaultSpendEffect(),
             status = TransactionStatus.POSTED,
             amount = Money(2000, Currency.EGP),
             direction = Direction.DEBIT,

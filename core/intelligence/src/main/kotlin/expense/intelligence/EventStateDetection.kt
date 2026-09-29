@@ -41,7 +41,7 @@ class LexicalEventStateDetector(
         val completed = canMove && !failed && !upcoming
         val corroboration = listOf(
             classification.confidence >= strongConfidence && canMove,
-            entities.eventAmount != null,
+            entities.amounts.any { it.role.isEventValue() },
             entities.instrument != null,
             entities.amounts.any { it.role.isBalance() },
             completionCue,

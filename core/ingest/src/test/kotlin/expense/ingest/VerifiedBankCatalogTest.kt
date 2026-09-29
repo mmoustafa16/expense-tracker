@@ -30,12 +30,12 @@ class VerifiedBankCatalogTest {
         assertTrue(result.state.transactions.isEmpty())
         assertEquals(1, result.state.reviewQueue().size)
         val tally = IngestTally().add(result)
-        assertEquals(1, tally.scanned)
-        assertEquals(1, tally.financial)
-        assertEquals(0, tally.matchedProfile)
-        assertEquals(1, tally.unsupported)
-        assertEquals(0, tally.parsed)
-        assertEquals(0, tally.posted)
+        assertEquals(1, tally.smsScanned)
+        assertEquals(1, tally.financialEvents)
+        assertEquals(0, tally.postedTransactions)
+        assertEquals(1, tally.reviewItems)
+        assertEquals(0, tally.spendTransactions)
+        assertEquals(0, tally.excludedFinancialEvents)
         assertTrue(VerifiedBankCatalog.registry().profiles.isEmpty())
     }
 

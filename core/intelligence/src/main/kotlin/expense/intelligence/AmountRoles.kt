@@ -15,9 +15,16 @@ import expense.parse.RoledAmount
  * which is what turns "amount plus remaining balance" into a false ambiguity.
  * Splitting on sentence and list punctuation keeps each value with the words
  * that describe it.
+ *
+ * A period between digits is a decimal point and a comma between digits groups
+ * thousands, so neither ends a clause. Treating them as boundaries cuts an
+ * amount away from the words that name it, which is how a stated amount ends up
+ * with no role at all.
  */
 object ClauseSegmenter {
-    private val boundary = Regex("""[.;|\n\r!?]+|،|,|\s-\s|\bو(?=\s)""")
+    private val boundary = Regex(
+        """(?<![0-9])\.(?![0-9])|[;|!?\n\r]+|(?<![0-9]),(?![0-9])|،|\s[-–]\s|\bو(?=\s)""",
+    )
 
     data class Clause(val text: String, val start: Int, val end: Int)
 

@@ -1,5 +1,6 @@
 package expense.intelligence
 
+import expense.parse.AccountKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -12,7 +13,10 @@ import java.time.LocalDateTime
  * The fixtures are structural. They are not a bank parser.
  */
 class CibReviewHoldTest {
-    private val intelligence = FinancialSmsIntelligence.deterministic()
+    private val intelligence = FinancialSmsIntelligence.deterministic(
+        senderEvidence = establishedChannel("CIB"),
+    )
+    private val unproven = FinancialSmsIntelligence.deterministic()
     private val card =
         "Your credit card#0019 was charged for EGP 31.89 at Talabat on 30/03/24 at 20:19. Available limit is 137968.11."
     private val transfer =
@@ -36,10 +40,17 @@ class CibReviewHoldTest {
     }
 
     @Test
+    fun `the same channel cannot post before its history has earned it`() {
+        val charged = unproven.assess(SmsText("CIB", card))
+        assertFalse(charged.postable)
+        assertEquals("unverified_institution", charged.reviewHold())
+        assertEquals("0019", charged.entities.accountMask)
+    }
+
+    @Test
     fun `a clear charge without a merchant still posts and incomplete messages stay in review`() {
         val plain = intelligence.assess(SmsText("CIB", "Your card was charged EGP 40.00"))
-        assertFalse(plain.postable)
-        assertEquals("unverified_institution", plain.reviewHold())
+        assertTrue(plain.postable)
         assertNull(plain.entities.merchant)
         assertNull(plain.entities.accountMask)
 
@@ -49,15 +60,14 @@ class CibReviewHoldTest {
         assertTrue(masked.postable)
         assertEquals("4229", masked.entities.accountMask)
         assertEquals(
-            InstrumentKind.CREDIT_CARD,
+            AccountKind.CREDIT_CARD,
             paymentInstrument("Your credit card ****4229 was charged EGP 41.76 at Uber on 28-09-2026 at 19:58.")?.kind,
         )
         assertEquals("Uber", masked.entities.merchant)
         assertEquals(LocalDateTime.of(2026, 9, 28, 19, 58), masked.entities.occurredAt)
 
         val arabic = intelligence.assess(SmsText("CIB", "تم استخدام بطاقتك لشراء مبلغ 65 جنيه لدى المتجر"))
-        assertFalse(arabic.postable)
-        assertEquals("unverified_institution", arabic.reviewHold())
+        assertTrue(arabic.postable)
         assertEquals("المتجر", arabic.entities.merchant)
 
         val twoAmounts = intelligence.assess(SmsText("CIB", "You paid EGP 20.00 and EGP 5.00 at Shop"))
@@ -74,7 +84,7 @@ class CibReviewHoldTest {
         assertEquals("unknown_institution", handset.reviewHold())
 
         val balance = intelligence.assess(SmsText("CIB", "Your available balance is EGP 1,250.00"))
-        assertFalse(balance.classification.type.isLedgerCandidate())
+        assertFalse(balance.classification.eventType.canMoveMoney())
         assertNull(balance.reviewHold())
         assertFalse(balance.postable)
     }

@@ -1,23 +1,25 @@
 package expense.ingest
 
 import expense.ingest.fixture.SyntheticBankProfile
-import expense.intelligence.AmountRole
 import expense.intelligence.BankDiscovery
 import expense.intelligence.BankDiscoveryResult
-import expense.intelligence.SemanticTransactionClassifier
-import expense.intelligence.RegisteredSender
 import expense.intelligence.DeterministicTransactionValidator
 import expense.intelligence.ExtractedEntities
 import expense.intelligence.FinancialEntityExtractor
 import expense.intelligence.FinancialSmsIntelligence
 import expense.intelligence.LocalInstitutionEvidence
+import expense.intelligence.RegisteredSender
+import expense.intelligence.SemanticTransactionClassifier
 import expense.intelligence.UserConfirmedSender
 import expense.ledger.SpendPolicy
 import expense.money.Currency
 import expense.money.Money
+import expense.parse.AmountResolution
+import expense.parse.AmountRole
 import expense.parse.BankRegistry
+import expense.parse.FinancialEventType
 import expense.parse.ParseStatus
-import expense.parse.TransactionKind
+import expense.parse.RoledAmount
 import expense.parse.VerifiedBankCatalog
 import expense.sms.InboundSms
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -77,7 +79,7 @@ class IntelligenceIngestTest {
         assertEquals(ParseStatus.PARSED, first.status)
         assertTrue(first.posted)
         assertEquals("example.test-bank", first.state.transactions.single().institutionId)
-        assertEquals(TransactionKind.PURCHASE, first.state.transactions.single().kind)
+        assertEquals(FinancialEventType.CARD_PURCHASE, first.state.transactions.single().eventType)
         assertEquals(Money(12050, Currency.EGP), first.state.transactions.single().amount)
         assertEquals("Talabat", first.state.transactions.single().merchantRaw)
         assertEquals(12050L, SpendPolicy.signedMinor(first.state.transactions.single()))
@@ -108,7 +110,7 @@ class IntelligenceIngestTest {
         assertTrue(ambiguous.state.transactions.isEmpty())
         assertEquals(1, ambiguous.state.reviewQueue().size)
 
-        val missing = pipeline.ingest(sms("miss", "Your card was charged at Talabat"))
+        val missing = pipeline.ingest(sms("miss", "Your card ****4229 was charged at Talabat"))
         assertEquals(ParseStatus.UNSUPPORTED, missing.status)
         assertTrue(missing.state.transactions.isEmpty())
         assertEquals(1, missing.state.reviewQueue().size)
@@ -121,12 +123,18 @@ class IntelligenceIngestTest {
             classifier = SemanticTransactionClassifier.bundled(),
             extractor = FinancialEntityExtractor {
                 ExtractedEntities(
-                    amount = Money(99900, Currency.EGP),
-                    amountToken = "999.00",
-                    currency = Currency.EGP,
-                    currencyToken = "EGP",
+                    amounts = listOf(
+                        RoledAmount(
+                            amount = Money(99900, Currency.EGP),
+                            role = AmountRole.TRANSACTION_AMOUNT,
+                            token = "999.00",
+                            currencyToken = "EGP",
+                            start = 0,
+                            end = 6,
+                        ),
+                    ),
+                    resolution = AmountResolution.RESOLVED,
                     merchant = "Shop",
-                    amountRole = AmountRole.TRANSACTION,
                 )
             },
             validator = DeterministicTransactionValidator(),

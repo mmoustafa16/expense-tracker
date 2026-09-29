@@ -1,5 +1,7 @@
 package expense.intelligence
 
+import expense.parse.Direction
+import expense.parse.FinancialEventType
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -25,16 +27,13 @@ class SemanticClassificationTest {
         val purchase = classifier.classify(SmsText("SOME BANK", purchaseBody))
 
         assertEquals("renewal_attempt", attempt.semantics?.intent)
-        assertFalse(attempt.semantics!!.transactionCompleted)
-        assertFalse(attempt.semantics!!.moneyMovement)
-        assertFalse(attempt.type.isLedgerCandidate())
+        assertEquals(FinancialEventType.PAYMENT_DUE, attempt.eventType)
+        assertFalse(attempt.eventType.canMoveMoney())
 
         assertEquals("card_purchase", purchase.semantics?.intent)
-        assertTrue(purchase.semantics!!.transactionCompleted)
-        assertTrue(purchase.semantics!!.moneyMovement)
-        assertEquals(MoneyDirection.DEBIT, purchase.semantics!!.direction)
-        assertEquals(TransactionClass.CARD_PURCHASE, purchase.type)
-        assertTrue(purchase.type.isLedgerCandidate())
+        assertEquals(Direction.DEBIT, purchase.semantics!!.direction)
+        assertEquals(FinancialEventType.CARD_PURCHASE, purchase.eventType)
+        assertTrue(purchase.eventType.canMoveMoney())
         assertTrue(purchase.confidence >= 80)
 
         assertEquals(attempt, classifier.classify(SmsText("UNRELATED", attemptBody)))
@@ -67,10 +66,8 @@ class SemanticClassificationTest {
             ),
         )
         assertEquals("transfer_out", transfer.semantics?.intent)
-        assertTrue(transfer.semantics!!.transactionCompleted)
-        assertTrue(transfer.semantics!!.moneyMovement)
-        assertEquals(MoneyDirection.DEBIT, transfer.semantics!!.direction)
-        assertEquals(TransactionClass.TRANSFER, transfer.type)
+        assertEquals(Direction.DEBIT, transfer.semantics!!.direction)
+        assertEquals(FinancialEventType.BANK_TRANSFER, transfer.eventType)
         assertTrue(transfer.confidence >= 80)
 
         val paraphrases = listOf(
@@ -83,9 +80,8 @@ class SemanticClassificationTest {
         paraphrases.forEach { body ->
             val classified = classifier.classify(SmsText("UNKNOWN", body))
             assertEquals("transfer_out", classified.semantics?.intent, body)
-            assertTrue(classified.semantics!!.transactionCompleted, body)
-            assertTrue(classified.semantics!!.moneyMovement, body)
-            assertEquals(MoneyDirection.DEBIT, classified.semantics!!.direction, body)
+            assertEquals(Direction.DEBIT, classified.semantics!!.direction, body)
+            assertEquals(FinancialEventType.BANK_TRANSFER, classified.eventType, body)
             assertTrue(classified.confidence >= 80, body)
         }
 
@@ -96,9 +92,8 @@ class SemanticClassificationTest {
             ),
         )
         assertEquals("transfer_in", credit.semantics?.intent)
-        assertEquals(MoneyDirection.CREDIT, credit.semantics!!.direction)
-        assertTrue(credit.semantics!!.transactionCompleted)
-        assertTrue(credit.semantics!!.moneyMovement)
+        assertEquals(Direction.CREDIT, credit.semantics!!.direction)
+        assertEquals(FinancialEventType.BANK_TRANSFER, credit.eventType)
 
         val purchase = classifier.classify(
             SmsText(
@@ -107,9 +102,8 @@ class SemanticClassificationTest {
             ),
         )
         assertEquals("card_purchase", purchase.semantics?.intent)
-        assertEquals(MoneyDirection.DEBIT, purchase.semantics!!.direction)
-        assertTrue(purchase.semantics!!.transactionCompleted)
-        assertTrue(purchase.semantics!!.moneyMovement)
+        assertEquals(Direction.DEBIT, purchase.semantics!!.direction)
+        assertEquals(FinancialEventType.CARD_PURCHASE, purchase.eventType)
 
         val balance = classifier.classify(
             SmsText(
@@ -118,9 +112,8 @@ class SemanticClassificationTest {
             ),
         )
         assertEquals("balance", balance.semantics?.intent)
-        assertFalse(balance.semantics!!.transactionCompleted)
-        assertFalse(balance.semantics!!.moneyMovement)
-        assertFalse(balance.type.isLedgerCandidate())
+        assertEquals(FinancialEventType.BALANCE_NOTIFICATION, balance.eventType)
+        assertFalse(balance.eventType.canMoveMoney())
     }
 
     @Test
@@ -130,10 +123,8 @@ class SemanticClassificationTest {
         val fromUnknown = classifier.classify(SmsText("UNKNOWN", body))
         assertEquals(fromCarrier, fromUnknown)
         assertEquals("renewal_attempt", fromCarrier.semantics?.intent)
-        assertFalse(fromCarrier.semantics!!.transactionCompleted)
-        assertFalse(fromCarrier.semantics!!.moneyMovement)
-        assertFalse(fromCarrier.type.isLedgerCandidate())
-        assertEquals(TransactionClass.OTHER_NON_TRANSACTION, fromCarrier.type)
+        assertEquals(FinancialEventType.PAYMENT_DUE, fromCarrier.eventType)
+        assertFalse(fromCarrier.eventType.canMoveMoney())
     }
 
     @Test
@@ -182,13 +173,11 @@ class SemanticClassificationTest {
         val semantics = classification.semantics
         val text = fixture.getString("text")
         assertEquals(fixture.getString("name"), semantics?.intent, text)
-        assertEquals(TransactionClass.valueOf(fixture.getString("transactionClass")), classification.type, text)
-        assertEquals(fixture.getBoolean("transactionCompleted"), semantics?.transactionCompleted, text)
-        assertEquals(fixture.getBoolean("moneyMovement"), semantics?.moneyMovement, text)
+        assertEquals(FinancialEventType.valueOf(fixture.getString("eventType")), classification.eventType, text)
         assertEquals(fixture.getBoolean("ambiguous"), classification.ambiguous, text)
-        val direction = if (fixture.isNull("direction")) null else MoneyDirection.valueOf(fixture.getString("direction"))
+        val direction = if (fixture.isNull("direction")) null else Direction.valueOf(fixture.getString("direction"))
         assertEquals(direction, semantics?.direction, text)
-        if (classification.type.isLedgerCandidate() && !classification.ambiguous) {
+        if (classification.eventType.canMoveMoney() && !classification.ambiguous) {
             assertTrue(classification.confidence >= 80, text)
         }
     }

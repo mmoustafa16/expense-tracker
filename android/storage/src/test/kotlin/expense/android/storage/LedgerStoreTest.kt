@@ -11,6 +11,7 @@ import expense.categories.NewCategory
 import expense.categories.RuleSource
 import expense.ingest.IngestPipeline
 import expense.ingest.PipelineMetadata
+import expense.intelligence.SenderEvidence
 import expense.ledger.Account
 import expense.ledger.Correction
 import expense.ledger.CorrectionField
@@ -34,10 +35,10 @@ import expense.parse.BankProfile
 import expense.parse.BankRegistry
 import expense.parse.Direction
 import expense.parse.Extraction
+import expense.parse.FinancialEventType
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
 import expense.parse.TransactionCandidate
-import expense.parse.TransactionKind
 import expense.sms.BodyHash
 import expense.sms.InboundSms
 import expense.sms.SmsPages
@@ -78,12 +79,14 @@ class LedgerRepositoryTest {
                     profileVersion = null,
                     templateId = null,
                     status = ParseStatus.UNSUPPORTED,
+                    eventType = FinancialEventType.CARD_PURCHASE,
                     confidence = 40,
                     extraction = Extraction(
                         confidence = 40,
                         candidates = listOf(
                             TransactionCandidate(
-                                kind = TransactionKind.PURCHASE,
+                                eventType = FinancialEventType.CARD_PURCHASE,
+                                spendEffect = FinancialEventType.CARD_PURCHASE.defaultSpendEffect(),
                                 amount = Money(2000, Currency.EGP),
                                 direction = Direction.DEBIT,
                                 merchantRaw = "Shop",
@@ -235,6 +238,11 @@ class LedgerRepositoryTest {
             profileVersion = null,
             templateId = null,
             status = status,
+            eventType = if (status == ParseStatus.IGNORED_NOT_BANK) {
+                FinancialEventType.NOT_FINANCIAL
+            } else {
+                FinancialEventType.CARD_PURCHASE
+            },
             confidence = null,
             extraction = null,
             error = null,
@@ -263,14 +271,15 @@ class LedgerRepositoryTest {
                 ),
             ),
         )
-        assertEquals(1, reclassify(repository, pageSize = 1, maxPages = 1))
+        val pipeline = establishedPipeline("LAB")
+        assertEquals(1, reclassify(repository, pipeline, pageSize = 1, maxPages = 1))
         val firstPage = repository.load()
         assertEquals(null, firstPage.messages.single { it.id == "promo" }.body)
         assertEquals(ParseStatus.IGNORED_NOT_BANK, firstPage.attempts.single { it.smsId == "promo" }.status)
         assertEquals(PipelineMetadata.VERSION, firstPage.attempts.single { it.smsId == "promo" }.pipelineVersion)
         assertEquals(otp, firstPage.messages.single { it.id == "otp" }.body)
         assertEquals("1", firstPage.attempts.single { it.smsId == "otp" }.pipelineVersion)
-        assertEquals(4, reclassify(repository, pageSize = 1))
+        assertEquals(4, reclassify(repository, pipeline, pageSize = 1))
         val loaded = repository.load()
         assertEquals(null, loaded.messages.single { it.id == "promo" }.body)
         assertEquals(null, loaded.messages.single { it.id == "otp" }.body)
@@ -285,9 +294,13 @@ class LedgerRepositoryTest {
         assertEquals(ParseStatus.PARSED, loaded.attempts.single { it.smsId == "parsed" }.status)
         assertEquals("1", loaded.attempts.single { it.smsId == "parsed" }.pipelineVersion)
         assertEquals(0, repository.reviewWindow(0, 20).total)
-        assertEquals(2, repository.storedTally().financial)
-        assertEquals(0, repository.storedTally().unsupported)
-        assertEquals(0, reclassify(repository, pageSize = 1))
+        val tally = repository.storedTally()
+        assertEquals(6, tally.smsScanned)
+        assertEquals(3, tally.financialEvents)
+        assertEquals(1, tally.postedTransactions)
+        assertEquals(0, tally.reviewItems)
+        assertEquals(1, tally.spendTransactions)
+        assertEquals(0, reclassify(repository, pipeline, pageSize = 1))
         assertEquals(loaded.attempts.map { it.status }, repository.load().attempts.map { it.status })
     }
 
@@ -308,6 +321,7 @@ class LedgerRepositoryTest {
                         profileVersion = null,
                         templateId = null,
                         status = ParseStatus.UNSUPPORTED,
+                        eventType = FinancialEventType.CARD_PURCHASE,
                         confidence = null,
                         extraction = null,
                         error = null,
@@ -315,17 +329,19 @@ class LedgerRepositoryTest {
                 ),
             ),
         )
-        assertEquals(1, reclassify(repository, pageSize = 1))
+        val pipeline = establishedPipeline("CIB")
+        assertEquals(1, reclassify(repository, pipeline, pageSize = 1))
         val loaded = repository.load()
         val attempt = loaded.attempts.single()
         assertEquals(ParseStatus.PARSED, attempt.status)
         assertEquals(PipelineMetadata.VERSION, attempt.pipelineVersion)
         assertEquals(body, loaded.messages.single().body)
-        assertEquals(TransactionKind.TRANSFER_OUT, loaded.transactions.single().kind)
+        assertEquals(FinancialEventType.BANK_TRANSFER, loaded.transactions.single().eventType)
+        assertEquals(Direction.DEBIT, loaded.transactions.single().direction)
         assertEquals("cib", loaded.transactions.single().institutionId)
         assertEquals("9438", loaded.accounts.single().mask)
         assertEquals(0, repository.reviewWindow(0, 20).total)
-        assertEquals(0, reclassify(repository, pageSize = 1))
+        assertEquals(0, reclassify(repository, pipeline, pageSize = 1))
     }
 
     @Test
@@ -345,6 +361,7 @@ class LedgerRepositoryTest {
                         profileVersion = null,
                         templateId = null,
                         status = ParseStatus.UNSUPPORTED,
+                        eventType = FinancialEventType.CARD_PURCHASE,
                         confidence = null,
                         extraction = null,
                         error = null,
@@ -371,16 +388,16 @@ class LedgerRepositoryTest {
         assertEquals(PipelineMetadata.VERSION, loaded.attempts.single().pipelineVersion)
         assertEquals(body, loaded.messages.single().body)
         assertEquals(1, loaded.transactions.size)
-        assertEquals(TransactionKind.PURCHASE, loaded.transactions.single().kind)
+        assertEquals(FinancialEventType.CARD_PURCHASE, loaded.transactions.single().eventType)
         assertEquals(0, repository.reviewWindow(0, 20).total)
         assertEquals(0, reclassify(repository, pipeline, pageSize = 1))
     }
 
     @Test
-    fun `relink attaches only the account the sms states`() {
+    fun `a revision associates the card an older reading missed`() {
         val repository = memoryRepository()
         val maskedBody = "Your credit card ****4229 was charged EGP 41.76 at Uber"
-        val bareBody = "Charged EGP 5.00 at Uber"
+        val bareBody = "Your credit card was charged EGP 5.00 at Uber"
         val received = Instant.parse("2026-09-28T17:58:00Z")
         repository.save(
             LedgerState(
@@ -408,18 +425,20 @@ class LedgerRepositoryTest {
                 ),
             ),
         )
-        assertEquals(received.plusSeconds(60).toEpochMilli() to 2L, repository.inboxHighWater())
+        assertEquals(2L, repository.inboxWatermark())
         val pipeline = IngestPipeline()
-        assertEquals(
-            1,
-            repository.relinkUnassigned(10, pipeline::explicitAccount) { "acct-new" },
-        )
+        val newer = "reading-after-upgrade"
+        assertEquals(2, repository.staleRevisionCount(newer))
+        assertEquals(1, revise(repository, pipeline, newer, "acct-new"))
         val loaded = repository.load()
         assertEquals("acct-new", loaded.transactions.single { it.id == "tx-mask" }.accountId)
         assertEquals(null, loaded.transactions.single { it.id == "tx-bare" }.accountId)
         assertEquals("4229", loaded.accounts.single().mask)
         assertEquals(AccountKind.CREDIT_CARD, loaded.accounts.single().kind)
-        assertEquals(0, repository.relinkUnassigned(10, pipeline::explicitAccount) { "acct-again" })
+        assertEquals(listOf("tx-bare", "tx-mask"), loaded.transactions.map { it.id }.sorted())
+        assertEquals(0, repository.staleRevisionCount(newer))
+        assertEquals(0, revise(repository, pipeline, newer, "acct-again"))
+        assertEquals(1, repository.load().accounts.size)
     }
 
     @Test
@@ -435,7 +454,8 @@ class LedgerRepositoryTest {
             smsId = "sms-1",
             institutionId = "bank-1",
             accountId = "acct-1",
-            kind = TransactionKind.PURCHASE,
+            eventType = FinancialEventType.CARD_PURCHASE,
+            spendEffect = FinancialEventType.CARD_PURCHASE.defaultSpendEffect(),
             status = TransactionStatus.POSTED,
             amount = Money(15000, Currency.EGP),
             direction = Direction.DEBIT,
@@ -616,12 +636,12 @@ class DatabaseRetentionTest {
         assertEquals("Debited EGP 44 for Shop", second.rows.last().body)
         assertTrue(second.rows.none { it.body == "Debited EGP 0 for Shop" })
         val tally = session.storedTally()
-        assertEquals(total + 1, tally.scanned)
-        assertEquals(total, tally.financial)
-        assertEquals(0, tally.matchedProfile)
-        assertEquals(total, tally.unsupported)
-        assertEquals(0, tally.parsed)
-        assertEquals(0, tally.posted)
+        assertEquals(total + 1, tally.smsScanned)
+        assertEquals(total, tally.financialEvents)
+        assertEquals(0, tally.postedTransactions)
+        assertEquals(total, tally.reviewItems)
+        assertEquals(0, tally.spendTransactions)
+        assertEquals(0, tally.excludedFinancialEvents)
     }
 
     @Test
@@ -874,6 +894,48 @@ private fun reclassify(
         post = { state, message, decision ->
             pipeline.postStored(state, message, checkNotNull(decision.profile), checkNotNull(decision.extraction))
         },
+    )
+}
+
+/**
+ * A pipeline whose sender history already earned verification for [sender].
+ *
+ * Verification is earned from aggregate behaviour, so a stored reading that is
+ * expected to post has to start from a channel that has one. A fresh install
+ * seeing its first message from the same address holds it in review instead.
+ */
+private fun establishedPipeline(
+    sender: String,
+    registry: BankRegistry = BankRegistry.EMPTY,
+): IngestPipeline {
+    val pipeline = IngestPipeline(registry = registry)
+    pipeline.preloadSenderEvidence(
+        listOf(
+            SenderEvidence(
+                sender = sender,
+                financialEvents = 6,
+                movementEvents = 5,
+                eventTypes = setOf(FinancialEventType.CARD_PURCHASE, FinancialEventType.BANK_TRANSFER),
+                instrumentMasks = setOf("4229"),
+                instrumentKinds = setOf(AccountKind.CREDIT_CARD),
+            ),
+        ),
+    )
+    return pipeline
+}
+
+private fun revise(
+    repository: SqlDelightLedgerRepository,
+    pipeline: IngestPipeline,
+    revision: String,
+    accountId: String,
+    pageSize: Int = 10,
+): Int {
+    return repository.reviseStoredTransactions(
+        pageSize = pageSize,
+        revision = revision,
+        interpret = pipeline::interpretStored,
+        newAccountId = { accountId },
     )
 }
 

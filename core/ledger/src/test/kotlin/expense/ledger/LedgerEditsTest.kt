@@ -6,9 +6,9 @@ import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
+import expense.parse.FinancialEventType
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
-import expense.parse.TransactionKind
 import expense.sms.BodyHash
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -56,7 +56,7 @@ class LedgerEditsTest {
             ManualDraft(
                 amount = Money(2000, Currency.EGP),
                 direction = Direction.DEBIT,
-                kind = TransactionKind.PURCHASE,
+                eventType = FinancialEventType.CARD_PURCHASE,
                 occurredAt = Instant.parse("2026-05-01T08:00:00Z"),
                 occurredCivil = LocalDateTime.of(2026, 5, 1, 10, 0),
                 merchantRaw = "Shop",
@@ -94,7 +94,7 @@ class LedgerEditsTest {
             ManualDraft(
                 amount = Money(100, Currency.USD),
                 direction = Direction.CREDIT,
-                kind = TransactionKind.INCOME,
+                eventType = FinancialEventType.INCOME,
                 occurredAt = Instant.parse("2026-05-02T08:00:00Z"),
                 occurredCivil = LocalDateTime.of(2026, 5, 2, 10, 0),
                 merchantRaw = null,
@@ -145,6 +145,7 @@ class LedgerEditsTest {
                     profileVersion = null,
                     templateId = null,
                     status = ParseStatus.UNSUPPORTED,
+                    eventType = FinancialEventType.CARD_PURCHASE,
                     confidence = null,
                     extraction = null,
                     error = null,

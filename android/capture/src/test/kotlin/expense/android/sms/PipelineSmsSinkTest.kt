@@ -5,7 +5,6 @@ import expense.ingest.IngestPipeline
 import expense.parse.ParseStatus
 import expense.sms.SmsSource
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -60,8 +59,13 @@ class PipelineSmsSinkTest {
         assertEquals("Debited EGP 4 for Shop", sink.ledgerState().messages.single().body)
     }
 
+    /**
+     * The broadcast arrives without a provider id, so the inbox sync sees the
+     * same text again. One message seen twice stays one row, and it takes the
+     * provider id so the watermark can move past it.
+     */
     @Test
-    fun `a broadcast and a later inbox row for the same text dedupe inside the replay window`() {
+    fun `a later inbox row hands its provider id to the broadcast row it repeats`() {
         val receivedAt = Instant.parse("2026-05-01T09:00:00Z")
         val sink = sink()
         val broadcast = BroadcastSmsConverter.joinParts(
@@ -85,10 +89,9 @@ class PipelineSmsSinkTest {
         )
 
         val messages = sink.ledgerState().messages
-        assertEquals(2, messages.size)
-        assertNull(messages[0].providerMessageId)
-        assertEquals("11", messages[1].providerMessageId)
-        assertEquals("Debited EGP 4 for Shop", messages[0].body)
+        assertEquals(1, messages.size)
+        assertEquals("11", messages.single().providerMessageId)
+        assertEquals("Debited EGP 4 for Shop", messages.single().body)
         assertEquals(1, sink.ledgerState().attempts.size)
         assertTrue(sink.ledgerState().transactions.isEmpty())
     }

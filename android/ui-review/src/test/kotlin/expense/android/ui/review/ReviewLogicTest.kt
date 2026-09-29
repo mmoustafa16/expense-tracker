@@ -10,10 +10,10 @@ import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
 import expense.parse.Extraction
+import expense.parse.FinancialEventType
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
 import expense.parse.TransactionCandidate
-import expense.parse.TransactionKind
 import expense.sms.BodyHash
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -56,6 +56,7 @@ class ReviewLogicTest {
                     profileVersion = null,
                     templateId = null,
                     status = ParseStatus.UNSUPPORTED,
+                    eventType = FinancialEventType.CARD_PURCHASE,
                     confidence = null,
                     extraction = null,
                     error = null,
@@ -113,12 +114,14 @@ class ReviewLogicTest {
             profileVersion = null,
             templateId = null,
             status = ParseStatus.LOW_CONFIDENCE,
+            eventType = FinancialEventType.CARD_PURCHASE,
             confidence = 40,
             extraction = Extraction(
                 confidence = 40,
                 candidates = listOf(
                     TransactionCandidate(
-                        kind = TransactionKind.PURCHASE,
+                        eventType = FinancialEventType.CARD_PURCHASE,
+                        spendEffect = FinancialEventType.CARD_PURCHASE.defaultSpendEffect(),
                         amount = Money(2000, Currency.EGP),
                         direction = Direction.DEBIT,
                         merchantRaw = "Shop",
@@ -158,6 +161,7 @@ class ReviewLogicTest {
                     profileVersion = null,
                     templateId = null,
                     status = ParseStatus.UNSUPPORTED,
+                    eventType = FinancialEventType.CARD_PURCHASE,
                     confidence = null,
                     extraction = null,
                     error = null,

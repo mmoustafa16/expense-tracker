@@ -6,6 +6,7 @@ import expense.parse.AccountKind
 import expense.parse.AmountResolution
 import expense.parse.AmountRole
 import expense.parse.Direction
+import expense.parse.EventAmounts
 import expense.parse.FinancialEventType
 import expense.parse.RoledAmount
 import expense.parse.SpendEffect
@@ -114,11 +115,17 @@ data class ExtractedEntities(
     val reference: String? = null,
     val occurredAt: LocalDateTime? = null,
     val direction: Direction? = null,
+    /**
+     * Which roles may carry the value of the event, most specific first. The
+     * extractor does not know the event type, so it uses the general order and
+     * the pipeline narrows it once the type is decided.
+     */
+    val valueRoles: List<AmountRole> = AmountRole.DEFAULT_VALUE_ROLES,
 ) {
     /** The single amount that carries the value of the event, when there is one. */
     val eventAmount: RoledAmount?
         get() = if (resolution == AmountResolution.RESOLVED) {
-            amounts.firstOrNull { it.role.isEventValue() }
+            EventAmounts.select(amounts, valueRoles)
         } else {
             null
         }

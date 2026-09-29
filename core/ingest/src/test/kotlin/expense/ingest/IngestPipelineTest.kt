@@ -17,11 +17,11 @@ import expense.parse.AccountKind
 import expense.parse.BankProfile
 import expense.parse.BankRegistry
 import expense.parse.Direction
+import expense.parse.FinancialEventType
 import expense.parse.ParseStatus
 import expense.parse.SmsTemplate
 import expense.parse.TemplateExtractor
 import expense.parse.TemplateLanguage
-import expense.parse.TransactionKind
 import expense.sms.InboundSms
 import expense.sms.SmsSource
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -53,12 +53,12 @@ class EmptyRegistryTest {
         assertTrue(!chatter.financial)
         assertNull(chatter.state.messages.last().body)
         val tally = IngestTally().add(financial).add(chatter)
-        assertEquals(2, tally.scanned)
-        assertEquals(1, tally.financial)
-        assertEquals(0, tally.matchedProfile)
-        assertEquals(1, tally.unsupported)
-        assertEquals(0, tally.parsed)
-        assertEquals(0, tally.posted)
+        assertEquals(2, tally.smsScanned)
+        assertEquals(1, tally.financialEvents)
+        assertEquals(0, tally.postedTransactions)
+        assertEquals(1, tally.reviewItems)
+        assertEquals(0, tally.spendTransactions)
+        assertEquals(0, tally.excludedFinancialEvents)
         assertTrue(chatter.state.transactions.isEmpty())
     }
 }
@@ -179,8 +179,8 @@ class SyntheticPipelineTest {
         val state = ingestAll(
             "TB|purchase_fee|EGP|200.00|Shop|2222|P1|15/01/2026 11:00|5.00",
         )
-        val purchase = state.transactions.single { it.kind == TransactionKind.PURCHASE }
-        val fee = state.transactions.single { it.kind == TransactionKind.FEE }
+        val purchase = state.transactions.single { it.eventType == FinancialEventType.CARD_PURCHASE }
+        val fee = state.transactions.single { it.eventType == FinancialEventType.FEE }
         assertEquals(20000L, purchase.amount.amountMinor)
         assertEquals(500L, fee.amount.amountMinor)
         assertEquals(purchase.id, fee.linkedTransactionId)
@@ -194,8 +194,8 @@ class SyntheticPipelineTest {
             "TB|purchase|EGP|150.00|Coffee Shop|4242|REF1|15/01/2026 10:00",
             "TB|refund|EGP|150.00|Coffee Shop|4242|REF1|02/02/2026 10:00",
         )
-        val purchase = refunded.transactions.single { it.kind == TransactionKind.PURCHASE }
-        val refund = refunded.transactions.single { it.kind == TransactionKind.REFUND }
+        val purchase = refunded.transactions.single { it.eventType == FinancialEventType.CARD_PURCHASE }
+        val refund = refunded.transactions.single { it.eventType == FinancialEventType.REFUND }
         assertEquals(TransactionStatus.POSTED, purchase.status)
         assertEquals(purchase.id, refund.linkedTransactionId)
         assertTrue(refund.includeInSpend)
@@ -208,8 +208,8 @@ class SyntheticPipelineTest {
             "TB|purchase|EGP|150.00|Coffee Shop|4242|REF1|15/01/2026 10:00",
             "TB|reversal|EGP|150.00|Coffee Shop|4242|REF1|03/02/2026 10:00",
         )
-        val original = reversed.transactions.single { it.kind == TransactionKind.PURCHASE }
-        val reversal = reversed.transactions.single { it.kind == TransactionKind.REVERSAL }
+        val original = reversed.transactions.single { it.eventType == FinancialEventType.CARD_PURCHASE }
+        val reversal = reversed.transactions.single { it.eventType == FinancialEventType.REVERSAL }
         assertEquals(TransactionStatus.VOIDED, original.status)
         assertEquals(false, original.includeInSpend)
         assertEquals(false, reversal.includeInSpend)
@@ -228,12 +228,16 @@ class SyntheticPipelineTest {
             "TB|cash|EGP|200.00|ATM|4242|C1|15/01/2026 18:00",
             "TB|installment|EGP|300.00|Store|4242|I1|15/01/2026 19:00|2|6",
         )
-        val failed = state.transactions.single { it.kind == TransactionKind.FAILED }
-        val out = state.transactions.single { it.kind == TransactionKind.TRANSFER_OUT }
-        val incoming = state.transactions.single { it.kind == TransactionKind.TRANSFER_IN }
-        val income = state.transactions.single { it.kind == TransactionKind.INCOME }
-        val cash = state.transactions.single { it.kind == TransactionKind.CASH_WITHDRAWAL }
-        val installment = state.transactions.single { it.kind == TransactionKind.INSTALLMENT }
+        val failed = state.transactions.single { it.eventType == FinancialEventType.FAILED_TRANSACTION }
+        val out = state.transactions.single {
+            it.eventType == FinancialEventType.BANK_TRANSFER && it.direction == Direction.DEBIT
+        }
+        val incoming = state.transactions.single {
+            it.eventType == FinancialEventType.BANK_TRANSFER && it.direction == Direction.CREDIT
+        }
+        val income = state.transactions.single { it.eventType == FinancialEventType.INCOME }
+        val cash = state.transactions.single { it.eventType == FinancialEventType.CASH_WITHDRAWAL }
+        val installment = state.transactions.single { it.eventType == FinancialEventType.INSTALLMENT }
         assertEquals(false, failed.includeInSpend)
         assertEquals("transfers", out.categoryId)
         assertEquals(false, out.includeInSpend)

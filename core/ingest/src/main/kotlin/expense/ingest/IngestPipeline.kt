@@ -92,7 +92,7 @@ class IngestPipeline(
         val bodyReplay = DuplicateMatcher.bodyReplay(state.messages, sms.sender, hash, sms.receivedAt)
         if (bodyReplay != null) {
             return IngestResult(
-                state = adopt(state, bodyReplay, sms),
+                state = reconcileReplay(state, bodyReplay, sms, hash),
                 status = null,
                 attempt = null,
                 alreadyIngested = true,
@@ -164,9 +164,24 @@ class IngestPipeline(
             eventType = decision.eventType,
             profile = decision.profile,
             templateId = decision.templateId,
-            extraction = decision.extraction,
+            extraction = decision.extraction ?: understood(assessment),
             error = decision.error,
         )
+    }
+
+    /**
+     * What the message says, whether or not it may post.
+     *
+     * A transaction that is already in the ledger has had its institution
+     * settled, so re-reading it is about the facts rather than about permission.
+     * Carrying the extraction lets a row that predates a better reader gain the
+     * card, the date, or the balance the message always stated, and it lets a
+     * review item show what was understood.
+     */
+    private fun understood(assessment: ClassificationDecision): Extraction? {
+        val event = assessment.event
+        if (!event.moneyMovement || event.amount == null) return null
+        return intelligenceExtraction(assessment)
     }
 
     fun postStored(
@@ -223,22 +238,34 @@ class IngestPipeline(
     }
 
     /**
-     * Takes the provider id of an inbox row onto the message this device already
-     * stored from the live broadcast.
+     * Settles what to do with a message whose text this device already stored.
      *
-     * The broadcast arrives with no provider id, so the later inbox sync sees the
-     * same text again. Writing the id onto the row that is already there keeps
-     * one message, one attempt, and one transaction, and it lets the provider id
-     * watermark advance past that row instead of re-reading it forever.
+     * A live broadcast is stored with no provider id, so the later inbox sync
+     * reads the same text again. That is one message seen twice, not two
+     * messages: the id is written onto the row that is already there, which
+     * keeps one attempt and one transaction and still lets the provider-id
+     * watermark advance past it.
+     *
+     * When the stored row already carries a provider id, the arrival is a
+     * genuinely separate SMS with the same text. It is stored and linked as a
+     * duplicate so the account holder can see both.
      */
-    private fun adopt(state: LedgerState, stored: StoredSms, incoming: InboundSms): LedgerState {
+    private fun reconcileReplay(
+        state: LedgerState,
+        stored: StoredSms,
+        incoming: InboundSms,
+        hash: String,
+    ): LedgerState {
         val providerId = incoming.providerMessageId
-        if (providerId.isNullOrBlank() || stored.providerMessageId != null) return state
-        return state.copy(
-            messages = state.messages.map { message ->
-                if (message.id == stored.id) message.copy(providerMessageId = providerId) else message
-            },
-        )
+        if (!providerId.isNullOrBlank() && stored.providerMessageId == null) {
+            return state.copy(
+                messages = state.messages.map { message ->
+                    if (message.id == stored.id) message.copy(providerMessageId = providerId) else message
+                },
+            )
+        }
+        val duplicate = storedCopy(incoming, hash, retainBody = stored.body != null)
+        return poster.attachDuplicateSms(state, stored.id, duplicate)
     }
 
     private fun restoreManual(
@@ -292,7 +319,8 @@ class IngestPipeline(
         val matched = matcher.match(sms.sender)
         val profile = matched.singleOrNull()
         if (matched.size > 1) {
-            if (assessment.routing.outcome == RoutingOutcome.IGNORE) {
+            val readable = assessment.routing.outcome != RoutingOutcome.IGNORE || anyTemplateReads(matched, sms)
+            if (!readable) {
                 return Interpretation(
                     status = ParseStatus.IGNORED_NOT_BANK,
                     retainBody = false,
@@ -347,6 +375,16 @@ class IngestPipeline(
                 profile = profile,
             )
         }
+    }
+
+    /**
+     * Whether one of the candidate institutions publishes a format this body
+     * fits. A published format that reads the message is evidence the message is
+     * financial even when the general reader cannot tell, and the ambiguity is
+     * then about which institution sent it rather than about what it says.
+     */
+    private fun anyTemplateReads(profiles: List<BankProfile>, sms: InboundSms): Boolean {
+        return profiles.any { TemplateRunner.execute(it, sms) is TemplateExecution.Extracted }
     }
 
     /**

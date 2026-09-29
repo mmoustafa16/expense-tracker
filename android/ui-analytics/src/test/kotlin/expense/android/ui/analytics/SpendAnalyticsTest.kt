@@ -12,7 +12,7 @@ import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -67,14 +67,14 @@ class SpendAnalyticsTest {
                     "groceries",
                     2000,
                     direction = Direction.CREDIT,
-                    kind = TransactionKind.REFUND,
+                    eventType = FinancialEventType.REFUND,
                     accountId = "acct-1",
                     institutionId = "bank-1",
                     merchantId = "m-shop",
                 ),
                 tx("other-bank", "fuel", 4000, accountId = "acct-2", institutionId = "bank-2", merchantId = "m-cafe"),
                 tx("april", "groceries", 9000, month = 4, accountId = "acct-1", institutionId = "bank-1"),
-                tx("transfer", "transfers", 8000, kind = TransactionKind.TRANSFER_OUT, include = false),
+                tx("transfer", "transfers", 8000, eventType = FinancialEventType.BANK_TRANSFER, include = false),
                 tx("plain", null, 1500, merchantId = null, merchantRaw = "Corner", accountId = null),
             ),
         )
@@ -117,7 +117,7 @@ class SpendAnalyticsTest {
         minor: Long,
         currency: Currency = Currency.EGP,
         direction: Direction = Direction.DEBIT,
-        kind: TransactionKind = TransactionKind.PURCHASE,
+        eventType: FinancialEventType = FinancialEventType.CARD_PURCHASE,
         include: Boolean = true,
         institutionId: String = "bank-1",
         accountId: String? = "acct-1",
@@ -132,7 +132,8 @@ class SpendAnalyticsTest {
             smsId = "sms-$id",
             institutionId = institutionId,
             accountId = accountId,
-            kind = kind,
+            eventType = eventType,
+            spendEffect = eventType.defaultSpendEffect(),
             status = if (include) TransactionStatus.POSTED else TransactionStatus.EXCLUDED,
             amount = Money(minor, currency),
             direction = direction,

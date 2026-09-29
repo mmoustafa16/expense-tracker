@@ -2,8 +2,8 @@ package expense.intelligence
 
 import expense.money.DigitFold
 import expense.money.MoneyText
-import expense.parse.AmountResolution
 import expense.parse.AmountRole
+import expense.parse.EventAmounts
 import expense.parse.RoledAmount
 import java.time.DateTimeException
 import java.time.LocalDateTime
@@ -27,7 +27,7 @@ class DeterministicEntityExtractor(
         val claimed = roled.map { it.start..it.end }
         return ExtractedEntities(
             amounts = roled,
-            resolution = resolutionOf(roled),
+            resolution = EventAmounts.resolve(roled, AmountRole.DEFAULT_VALUE_ROLES),
             merchant = findMerchant(folded),
             instrument = PaymentInstruments.find(folded, claimed),
             reference = findReference(folded),
@@ -36,25 +36,20 @@ class DeterministicEntityExtractor(
     }
 
     /**
-     * Names every value, then promotes at most one unnamed value to the event
-     * role when nothing else claims it. Promotion is what keeps terse messages
-     * working; it never overrides a value the message itself explained.
+     * Names every value, then promotes an unnamed value to the event role when
+     * nothing else claims it. Promotion is what keeps terse messages working;
+     * it never overrides a value the message itself explained, and it is
+     * refused when the unnamed values disagree, because choosing between them
+     * would be a guess the account holder should make instead.
      */
     private fun resolveRoles(folded: String): List<RoledAmount> {
         val tagged = roleTagger.tag(folded, AmountScanner.scan(folded))
         if (tagged.any { it.role.isEventValue() }) return tagged
-        val promotable = tagged.firstOrNull { it.role == AmountRole.UNKNOWN } ?: return tagged
+        val unnamed = tagged.filter { it.role == AmountRole.UNKNOWN }
+        if (unnamed.isEmpty() || unnamed.map { it.amount }.distinct().size > 1) return tagged
+        val promotable = unnamed.first()
         return tagged.map { item ->
             if (item.start == promotable.start) item.copy(role = AmountRole.TRANSACTION_AMOUNT) else item
-        }
-    }
-
-    private fun resolutionOf(amounts: List<RoledAmount>): AmountResolution {
-        val eventValues = amounts.filter { it.role.isEventValue() }
-        return when {
-            eventValues.isEmpty() -> AmountResolution.MISSING
-            eventValues.map { it.amount }.distinct().size > 1 -> AmountResolution.AMBIGUOUS
-            else -> AmountResolution.RESOLVED
         }
     }
 

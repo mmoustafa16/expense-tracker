@@ -1,13 +1,14 @@
 package expense.ingest
 
 import expense.intelligence.FinancialSmsIntelligence
-import expense.intelligence.MoneyDirection
+import expense.intelligence.SenderEvidence
 import expense.intelligence.SmsText
 import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
+import expense.parse.Direction
+import expense.parse.FinancialEventType
 import expense.parse.ParseStatus
-import expense.parse.TransactionKind
 import expense.sms.InboundSms
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -39,9 +40,9 @@ class AccountTransferReviewTest {
             assertTrue(result.state.transactions.isEmpty(), body)
             val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("01005551234", body))
             assertEquals("transfer_out", decision.classification.semantics?.intent, body)
-            assertTrue(decision.classification.semantics!!.transactionCompleted, body)
-            assertTrue(decision.classification.semantics!!.moneyMovement, body)
-            assertEquals(MoneyDirection.DEBIT, decision.classification.semantics!!.direction, body)
+            assertEquals(FinancialEventType.BANK_TRANSFER, decision.classification.eventType, body)
+            assertTrue(decision.event.moneyMovement, body)
+            assertEquals(Direction.DEBIT, decision.entities.direction, body)
             assertTrue(decision.classification.confidence >= 80, body)
         }
     }
@@ -55,7 +56,7 @@ class AccountTransferReviewTest {
         assertTrue(result.state.transactions.isEmpty())
         val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("01005551234", body))
         assertEquals("transfer_in", decision.classification.semantics?.intent)
-        assertEquals(MoneyDirection.CREDIT, decision.classification.semantics!!.direction)
+        assertEquals(Direction.CREDIT, decision.entities.direction)
     }
 
     @Test
@@ -67,20 +68,22 @@ class AccountTransferReviewTest {
         assertTrue(result.state.transactions.isEmpty())
         val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("01005551234", body))
         assertEquals("card_purchase", decision.classification.semantics?.intent)
-        assertEquals(MoneyDirection.DEBIT, decision.classification.semantics!!.direction)
+        assertEquals(Direction.DEBIT, decision.entities.direction)
     }
 
     @Test
     fun `sender CIB posts a completed transfer and a card charge on separate accounts`() {
         val card = "Your credit card#0019 was charged for EGP 31.89 at Talabat on 30/03/24 at 20:19. Available limit is 137968.11."
         val pipeline = IngestPipeline(ids = TransferIds())
+        pipeline.preloadSenderEvidence(listOf(cibHistory))
         val transfer = pipeline.ingest(message("CIB", cibTransfer, "transfer"))
         assertEquals(ParseStatus.PARSED, transfer.status)
         assertTrue(transfer.posted)
         assertTrue(transfer.state.reviewQueue().isEmpty())
         val transferTx = transfer.state.transactions.single()
         assertEquals("cib", transferTx.institutionId)
-        assertEquals(TransactionKind.TRANSFER_OUT, transferTx.kind)
+        assertEquals(FinancialEventType.BANK_TRANSFER, transferTx.eventType)
+        assertEquals(Direction.DEBIT, transferTx.direction)
         assertEquals(Money(3189, Currency.EGP), transferTx.amount)
         val transferAccount = transfer.state.accounts.single()
         assertEquals("cib", transferAccount.institutionId)
@@ -92,7 +95,7 @@ class AccountTransferReviewTest {
         assertEquals(ParseStatus.PARSED, purchase.status)
         assertTrue(purchase.posted)
         assertTrue(purchase.state.reviewQueue().isEmpty())
-        val purchaseTx = purchase.state.transactions.single { it.kind == TransactionKind.PURCHASE }
+        val purchaseTx = purchase.state.transactions.single { it.eventType == FinancialEventType.CARD_PURCHASE }
         assertEquals("cib", purchaseTx.institutionId)
         assertEquals(Money(3189, Currency.EGP), purchaseTx.amount)
         assertEquals("Talabat", purchaseTx.merchantRaw)
@@ -106,12 +109,24 @@ class AccountTransferReviewTest {
     @Test
     fun `a balance notice that mentions no transfer is ignored`() {
         val body = "Your account ending with ****1008 has available balance EGP 500.00. No transfer or debit took place."
-        val result = IngestPipeline(ids = TransferIds()).ingest(message("CIB", body, "balance"))
+        val pipeline = IngestPipeline(ids = TransferIds())
+        pipeline.preloadSenderEvidence(listOf(cibHistory))
+        val result = pipeline.ingest(message("CIB", body, "balance"))
         assertEquals(ParseStatus.IGNORED_NOT_BANK, result.status)
         assertTrue(result.state.reviewQueue().isEmpty())
         assertTrue(result.state.transactions.isEmpty())
         assertEquals(null, result.state.messages.single().body)
     }
+
+    /** What this device has already seen from the channel, in aggregate. */
+    private val cibHistory = SenderEvidence(
+        sender = "CIB",
+        financialEvents = 6,
+        movementEvents = 5,
+        eventTypes = setOf(FinancialEventType.CARD_PURCHASE, FinancialEventType.BANK_TRANSFER),
+        instrumentMasks = setOf("4229"),
+        instrumentKinds = setOf(AccountKind.CREDIT_CARD),
+    )
 
     private fun message(sender: String, body: String, id: String): InboundSms {
         return InboundSms(

@@ -12,7 +12,7 @@ import expense.merchants.Merchant
 import expense.money.Currency
 import expense.money.Money
 import expense.parse.Direction
-import expense.parse.TransactionKind
+import expense.parse.FinancialEventType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -50,7 +50,8 @@ class SearchPresentationTest {
             smsId = smsId,
             institutionId = "bank-1",
             accountId = null,
-            kind = TransactionKind.PURCHASE,
+            eventType = FinancialEventType.CARD_PURCHASE,
+            spendEffect = FinancialEventType.CARD_PURCHASE.defaultSpendEffect(),
             status = TransactionStatus.POSTED,
             amount = Money(2000, Currency.EGP),
             direction = Direction.DEBIT,

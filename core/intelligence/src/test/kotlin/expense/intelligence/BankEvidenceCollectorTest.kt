@@ -2,6 +2,7 @@ package expense.intelligence
 
 import expense.money.Currency
 import expense.money.Money
+import expense.parse.FinancialEventType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -56,7 +57,7 @@ class BankEvidenceCollectorTest {
         val decision = intelligence.assess(SmsText("01005551234", purchase))
         assertEquals(DiscoveryStatus.UNKNOWN, decision.discovery.status)
         assertTrue(decision.discovery.candidates.isEmpty())
-        assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
+        assertEquals(FinancialEventType.CARD_PURCHASE, decision.classification.eventType)
         assertEquals(Money(45000, Currency.EGP), decision.entities.amount)
         assertEquals("Talabat", decision.entities.merchant)
         assertFalse(decision.postable)
@@ -86,8 +87,8 @@ class BankEvidenceCollectorTest {
             )
         }
         assertNull(decision.discovery.verifiedInstitution)
-        assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
-        assertEquals(ConfidenceLevel.MEDIUM, decision.level)
+        assertEquals(FinancialEventType.CARD_PURCHASE, decision.classification.eventType)
+        assertEquals("ambiguous_institution", decision.reviewHold())
         assertFalse(decision.postable)
     }
 
@@ -113,7 +114,7 @@ class BankEvidenceCollectorTest {
             assertTrue(institution.evidence.any { it.kind == EvidenceKind.SENDER_SHAPE })
             assertFalse(institution.verified)
             assertNull(decision.discovery.verifiedInstitution)
-            assertEquals(TransactionClass.CARD_PURCHASE, decision.classification.type)
+            assertEquals(FinancialEventType.CARD_PURCHASE, decision.classification.eventType)
             assertFalse(decision.postable)
         }
     }

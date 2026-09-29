@@ -1,6 +1,7 @@
 package expense.intelligence
 
 import expense.parse.Direction
+import expense.parse.EventAmounts
 import expense.parse.FinancialEventType
 import expense.parse.SpendEffect
 
@@ -36,7 +37,8 @@ class FinancialSmsIntelligence(
         val predicted = classifier.classify(message)
         val extracted = extractor.extract(message)
         val refined = refiner.refine(message, predicted, extracted)
-        val entities = extracted.copy(direction = directionFor(refined, extracted))
+        val entities = withEventAmount(extracted, refined.eventType)
+            .copy(direction = directionFor(refined, extracted))
         val state = stateDetector.detect(message, refined, entities)
         val validation = validator.validate(message, entities)
         val routing = FinancialRouting.route(refined, entities, state, validation, discovered)
@@ -49,6 +51,22 @@ class FinancialSmsIntelligence(
             validation = validation,
             event = event,
             routing = routing,
+        )
+    }
+
+    /**
+     * Re-reads the amounts once the event type is known. The extractor names
+     * every value without knowing what happened; only here is it settled which
+     * of those names carries the value of this event.
+     */
+    private fun withEventAmount(
+        entities: ExtractedEntities,
+        eventType: FinancialEventType,
+    ): ExtractedEntities {
+        val roles = eventType.valueRoles()
+        return entities.copy(
+            valueRoles = roles,
+            resolution = EventAmounts.resolve(entities.amounts, roles),
         )
     }
 

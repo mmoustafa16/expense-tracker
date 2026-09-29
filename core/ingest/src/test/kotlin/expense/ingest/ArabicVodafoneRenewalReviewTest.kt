@@ -3,7 +3,7 @@ package expense.ingest
 import expense.intelligence.FinancialSmsIntelligence
 import expense.intelligence.RegisteredSender
 import expense.intelligence.SmsText
-import expense.intelligence.TransactionClass
+import expense.parse.FinancialEventType
 import expense.parse.ParseStatus
 import expense.sms.InboundSms
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -55,10 +55,9 @@ class ArabicVodafoneRenewalReviewTest {
 
             val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("Vodafone", body))
             assertEquals("renewal_attempt", decision.classification.semantics?.intent, body)
-            assertFalse(decision.classification.semantics!!.transactionCompleted, body)
-            assertFalse(decision.classification.semantics!!.moneyMovement, body)
-            assertFalse(decision.classification.type.isLedgerCandidate(), body)
-            assertEquals(TransactionClass.OTHER_NON_TRANSACTION, decision.classification.type, body)
+            assertEquals(FinancialEventType.PAYMENT_DUE, decision.classification.eventType, body)
+            assertFalse(decision.classification.eventType.canMoveMoney(), body)
+            assertFalse(decision.event.moneyMovement, body)
         }
     }
 
@@ -72,9 +71,8 @@ class ArabicVodafoneRenewalReviewTest {
         assertTrue(purchase.state.transactions.isEmpty())
         val decision = FinancialSmsIntelligence.deterministic().assess(SmsText("VF-EG", arabicPurchase))
         assertEquals("card_purchase", decision.classification.semantics?.intent)
-        assertTrue(decision.classification.semantics!!.transactionCompleted)
-        assertTrue(decision.classification.semantics!!.moneyMovement)
-        assertTrue(decision.classification.type.isLedgerCandidate())
+        assertEquals(FinancialEventType.CARD_PURCHASE, decision.classification.eventType)
+        assertTrue(decision.event.moneyMovement)
         val handset = open.ingest(message("01005551234", arabicPurchase, "handset"))
         assertEquals(ParseStatus.UNSUPPORTED, handset.status)
         assertEquals("unknown_institution", handset.attempt?.error)

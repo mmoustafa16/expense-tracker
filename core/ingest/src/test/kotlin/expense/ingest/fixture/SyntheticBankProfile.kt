@@ -8,11 +8,11 @@ import expense.parse.DayMonthYear
 import expense.parse.Direction
 import expense.parse.Extraction
 import expense.parse.ExtractorOutcome
+import expense.parse.FinancialEventType
 import expense.parse.SmsTemplate
 import expense.parse.TemplateExtractor
 import expense.parse.TemplateLanguage
 import expense.parse.TransactionCandidate
-import expense.parse.TransactionKind
 
 /**
  * Test-only bank. It is not a CBE-licensed institution and must not be
@@ -75,59 +75,59 @@ object SyntheticBankProfile {
     }
 
     private fun englishPurchase(parts: List<String>): ExtractorOutcome {
-        return single(parts, "purchase", TransactionKind.PURCHASE, Direction.DEBIT)
+        return single(parts, "purchase", FinancialEventType.CARD_PURCHASE, Direction.DEBIT)
     }
 
     private fun arabicPurchase(parts: List<String>): ExtractorOutcome {
         if (parts[0] != "تيست" || parts[1] != "شراء") return ExtractorOutcome.NoMatch
-        return matched(parts, TransactionKind.PURCHASE, Direction.DEBIT, confidence = 95)
+        return matched(parts, FinancialEventType.CARD_PURCHASE, Direction.DEBIT, confidence = 95)
     }
 
     private fun mixedPurchase(parts: List<String>): ExtractorOutcome {
-        return single(parts, "mixed", TransactionKind.PURCHASE, Direction.DEBIT)
+        return single(parts, "mixed", FinancialEventType.CARD_PURCHASE, Direction.DEBIT)
     }
 
     private fun purchaseWithFee(parts: List<String>): ExtractorOutcome {
         if (!isKind(parts, "purchase_fee")) return ExtractorOutcome.NoMatch
-        val purchase = candidate(parts, TransactionKind.PURCHASE, Direction.DEBIT, parts[3])
+        val purchase = candidate(parts, FinancialEventType.CARD_PURCHASE, Direction.DEBIT, parts[3])
         val feeAmount = parts.getOrNull(8).orEmpty()
-        val fee = candidate(parts, TransactionKind.FEE, Direction.DEBIT, feeAmount).copy(merchantRaw = "Fee")
+        val fee = candidate(parts, FinancialEventType.FEE, Direction.DEBIT, feeAmount).copy(merchantRaw = "Fee")
         return ExtractorOutcome.Matched(Extraction(95, listOf(purchase, fee)))
     }
 
     private fun refund(parts: List<String>): ExtractorOutcome {
-        return single(parts, "refund", TransactionKind.REFUND, Direction.CREDIT)
+        return single(parts, "refund", FinancialEventType.REFUND, Direction.CREDIT)
     }
 
     private fun reversal(parts: List<String>): ExtractorOutcome {
-        return single(parts, "reversal", TransactionKind.REVERSAL, Direction.CREDIT)
+        return single(parts, "reversal", FinancialEventType.REVERSAL, Direction.CREDIT)
     }
 
     private fun failedPayment(parts: List<String>): ExtractorOutcome {
-        return single(parts, "failed", TransactionKind.FAILED, Direction.DEBIT)
+        return single(parts, "failed", FinancialEventType.FAILED_TRANSACTION, Direction.DEBIT)
     }
 
     private fun transferOut(parts: List<String>): ExtractorOutcome {
-        return single(parts, "transfer_out", TransactionKind.TRANSFER_OUT, Direction.DEBIT, AccountKind.ACCOUNT)
+        return single(parts, "transfer_out", FinancialEventType.BANK_TRANSFER, Direction.DEBIT, AccountKind.ACCOUNT)
     }
 
     private fun transferIn(parts: List<String>): ExtractorOutcome {
-        return single(parts, "transfer_in", TransactionKind.TRANSFER_IN, Direction.CREDIT, AccountKind.ACCOUNT)
+        return single(parts, "transfer_in", FinancialEventType.BANK_TRANSFER, Direction.CREDIT, AccountKind.ACCOUNT)
     }
 
     private fun income(parts: List<String>): ExtractorOutcome {
-        return single(parts, "income", TransactionKind.INCOME, Direction.CREDIT, AccountKind.ACCOUNT)
+        return single(parts, "income", FinancialEventType.INCOME, Direction.CREDIT, AccountKind.ACCOUNT)
     }
 
     private fun cashWithdrawal(parts: List<String>): ExtractorOutcome {
-        return single(parts, "cash", TransactionKind.CASH_WITHDRAWAL, Direction.DEBIT)
+        return single(parts, "cash", FinancialEventType.CASH_WITHDRAWAL, Direction.DEBIT)
     }
 
     private fun installment(parts: List<String>): ExtractorOutcome {
         if (!isKind(parts, "installment")) return ExtractorOutcome.NoMatch
         val index = parts.getOrNull(8)?.toIntOrNull()
         val count = parts.getOrNull(9)?.toIntOrNull()
-        val body = candidate(parts, TransactionKind.INSTALLMENT, Direction.DEBIT, parts[3]).copy(
+        val body = candidate(parts, FinancialEventType.INSTALLMENT, Direction.DEBIT, parts[3]).copy(
             installmentIndex = index,
             installmentCount = count,
         )
@@ -138,7 +138,7 @@ object SyntheticBankProfile {
         if (!isKind(parts, "foreign")) return ExtractorOutcome.NoMatch
         val foreignCurrency = Currency.of(parts.getOrNull(8).orEmpty())
         val foreign = MoneyText.parse(parts.getOrNull(9).orEmpty(), foreignCurrency)
-        val purchase = candidate(parts, TransactionKind.PURCHASE, Direction.DEBIT, parts[3]).copy(
+        val purchase = candidate(parts, FinancialEventType.CARD_PURCHASE, Direction.DEBIT, parts[3]).copy(
             foreignAmount = foreign,
         )
         return ExtractorOutcome.Matched(Extraction(95, listOf(purchase)))
@@ -146,7 +146,7 @@ object SyntheticBankProfile {
 
     private fun lowConfidence(parts: List<String>): ExtractorOutcome {
         if (!isKind(parts, "maybe")) return ExtractorOutcome.NoMatch
-        return matched(parts, TransactionKind.PURCHASE, Direction.DEBIT, confidence = 40)
+        return matched(parts, FinancialEventType.CARD_PURCHASE, Direction.DEBIT, confidence = 40)
     }
 
     private fun boom(parts: List<String>): ExtractorOutcome {
@@ -156,23 +156,23 @@ object SyntheticBankProfile {
 
     private fun missingAmount(parts: List<String>): ExtractorOutcome {
         if (!isKind(parts, "no_amount")) return ExtractorOutcome.NoMatch
-        return matched(parts, TransactionKind.PURCHASE, Direction.DEBIT, confidence = 95)
+        return matched(parts, FinancialEventType.CARD_PURCHASE, Direction.DEBIT, confidence = 95)
     }
 
     private fun single(
         parts: List<String>,
         kindToken: String,
-        kind: TransactionKind,
+        eventType: FinancialEventType,
         direction: Direction,
         accountKind: AccountKind = AccountKind.DEBIT_CARD,
     ): ExtractorOutcome {
         if (!isKind(parts, kindToken)) return ExtractorOutcome.NoMatch
-        return matched(parts, kind, direction, confidence = 95, accountKind = accountKind)
+        return matched(parts, eventType, direction, confidence = 95, accountKind = accountKind)
     }
 
     private fun matched(
         parts: List<String>,
-        kind: TransactionKind,
+        eventType: FinancialEventType,
         direction: Direction,
         confidence: Int,
         accountKind: AccountKind = AccountKind.DEBIT_CARD,
@@ -180,14 +180,14 @@ object SyntheticBankProfile {
         return ExtractorOutcome.Matched(
             Extraction(
                 confidence = confidence,
-                candidates = listOf(candidate(parts, kind, direction, parts[3], accountKind)),
+                candidates = listOf(candidate(parts, eventType, direction, parts[3], accountKind)),
             ),
         )
     }
 
     private fun candidate(
         parts: List<String>,
-        kind: TransactionKind,
+        eventType: FinancialEventType,
         direction: Direction,
         amountText: String,
         accountKind: AccountKind = AccountKind.DEBIT_CARD,
@@ -195,7 +195,8 @@ object SyntheticBankProfile {
         val currency = Currency.of(parts[2])
         val mask = parts[5].takeIf { it.isNotBlank() }
         return TransactionCandidate(
-            kind = kind,
+            eventType = eventType,
+            spendEffect = eventType.defaultSpendEffect(),
             amount = amountText.takeIf { it.isNotBlank() }?.let { MoneyText.parse(it, currency) },
             direction = direction,
             merchantRaw = parts[4].takeIf { it.isNotBlank() },

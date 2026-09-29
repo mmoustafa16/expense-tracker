@@ -50,13 +50,12 @@ class SenderDiscoveryDiagnosticTest {
         assertEquals(1, report.senders.single { it.sender == "201012345678" }.classCounts["withdrawal"])
 
         val other = report.senders.single { it.sender == "Alert Line" }
-        assertEquals("other", other.shape)
+        assertEquals("alphanumeric", other.shape)
         assertEquals(1, other.classCounts["refund"])
         assertEquals(1, other.classCounts["reversal"])
         assertEquals(1, other.classCounts["fee"])
         assertEquals(1, other.classCounts["balance"])
-        assertEquals(1, other.classCounts["otp"])
-        assertEquals(1, other.classCounts["promotion"])
+        assertEquals(2, other.classCounts["not_financial"])
 
         val shown = report.lines().joinToString("\n") + "\n" + report.toString()
         val secrets = listOf(

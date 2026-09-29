@@ -78,6 +78,23 @@ enum class FinancialEventType {
         NOT_FINANCIAL,
         -> SpendEffect.NONE
     }
+
+    /**
+     * Roles that can carry the value of this event, most specific first.
+     *
+     * The event decides which number it means. A fee notice is about the fee, a
+     * settlement is about the payment, and a purchase is about the transaction
+     * amount, so a message that states a transaction and a fee in the same
+     * breath is not ambiguous once the event type is known.
+     */
+    fun valueRoles(): List<AmountRole> = when (this) {
+        FEE -> listOf(AmountRole.FEE_AMOUNT, AmountRole.TRANSACTION_AMOUNT)
+        REFUND, REVERSAL -> listOf(AmountRole.REFUND_AMOUNT, AmountRole.TRANSACTION_AMOUNT)
+        INSTALLMENT -> listOf(AmountRole.INSTALLMENT_AMOUNT, AmountRole.TRANSACTION_AMOUNT)
+        CREDIT_CARD_PAYMENT, BILL_PAYMENT ->
+            listOf(AmountRole.PAYMENT_AMOUNT, AmountRole.TRANSACTION_AMOUNT)
+        else -> AmountRole.DEFAULT_VALUE_ROLES
+    }
 }
 
 /**
@@ -138,18 +155,67 @@ enum class AmountRole {
     ;
 
     /**
-     * Roles that can carry the value of the event itself. A message states one
-     * of these once; more than one distinct value is a genuine ambiguity.
+     * The role names a value some event could be worth, as opposed to a
+     * balance, a ceiling, or an advertisement.
      */
-    fun isEventValue(): Boolean = when (this) {
-        TRANSACTION_AMOUNT, PAYMENT_AMOUNT, INSTALLMENT_AMOUNT, REFUND_AMOUNT -> true
-        else -> false
-    }
+    fun isEventValue(): Boolean = this in VALUE_ROLES
 
     /** Roles that describe the account rather than the event. */
     fun isBalance(): Boolean = when (this) {
         REMAINING_BALANCE, AVAILABLE_BALANCE, AVAILABLE_CREDIT -> true
         else -> false
+    }
+
+    companion object {
+        /**
+         * Roles that can be the value of an event whose type says nothing more
+         * specific, in the order a reader would prefer them.
+         */
+        val DEFAULT_VALUE_ROLES: List<AmountRole> = listOf(
+            TRANSACTION_AMOUNT,
+            PAYMENT_AMOUNT,
+            REFUND_AMOUNT,
+            INSTALLMENT_AMOUNT,
+        )
+
+        private val VALUE_ROLES: Set<AmountRole> = DEFAULT_VALUE_ROLES.toSet() + FEE_AMOUNT
+    }
+}
+
+/**
+ * Chooses which of the values in a message is the value of the event.
+ *
+ * The choice is made by role and by the event type, never by position or size,
+ * so a remaining balance, a credit ceiling, and a promotional maximum cannot
+ * stand in for what actually moved. An event whose own role holds two different
+ * values is [AmountResolution.AMBIGUOUS] and belongs to the account holder to
+ * settle; a message that names no value at all is [AmountResolution.MISSING].
+ */
+object EventAmounts {
+    fun resolve(amounts: List<RoledAmount>, valueRoles: List<AmountRole>): AmountResolution {
+        valueRoles.forEach { role ->
+            val claiming = amounts.filter { it.role == role }
+            if (claiming.isNotEmpty()) {
+                return if (claiming.map { it.amount }.distinct().size > 1) {
+                    AmountResolution.AMBIGUOUS
+                } else {
+                    AmountResolution.RESOLVED
+                }
+            }
+        }
+        val unnamed = amounts.filter { it.role == AmountRole.UNKNOWN }
+        return if (unnamed.map { it.amount }.distinct().size > 1) {
+            AmountResolution.AMBIGUOUS
+        } else {
+            AmountResolution.MISSING
+        }
+    }
+
+    fun select(amounts: List<RoledAmount>, valueRoles: List<AmountRole>): RoledAmount? {
+        valueRoles.forEach { role ->
+            amounts.firstOrNull { it.role == role }?.let { return it }
+        }
+        return null
     }
 }
 
