@@ -7,6 +7,7 @@ import expense.categories.NewCategory
 import expense.ingest.IdGenerator
 import expense.ingest.IngestPipeline
 import expense.ingest.IngestTally
+import expense.ingest.PipelineMetadata
 import expense.ingest.UuidIdGenerator
 import expense.ledger.AccountNames
 import expense.ledger.Correction
@@ -163,8 +164,19 @@ class LedgerSession(
 
     fun storedTally(): IngestTally = synchronized(lock) { repositoryLocked().storedTally() }
 
-    fun reclassifyRetained(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE): Int {
-        return synchronized(lock) { repositoryLocked().reclassifyRetained(pageSize) }
+    fun reclassifyRetained(pageSize: Int = SmsPages.DEFAULT_PAGE_SIZE, maxPages: Int = Int.MAX_VALUE): Int {
+        return synchronized(lock) {
+            repositoryLocked().reclassifyRetained(
+                pageSize = pageSize,
+                maxPages = maxPages,
+                pipelineVersion = PipelineMetadata.VERSION,
+                newAttemptId = ids::newId,
+                interpret = pipeline::interpretStored,
+                post = { state, message, decision ->
+                    pipeline.postStored(state, message, checkNotNull(decision.profile), checkNotNull(decision.extraction))
+                },
+            )
+        }
     }
 
     fun load(): LedgerState = synchronized(lock) { repositoryLocked().load() }

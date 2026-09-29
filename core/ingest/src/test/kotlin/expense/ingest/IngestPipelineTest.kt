@@ -116,7 +116,7 @@ class SyntheticPipelineTest {
         )
         assertEquals(listOf("en-purchase", "ar-purchase", "mixed-purchase"), state.attempts.map { it.templateId })
         assertEquals(listOf(123450L, 15050L, 8800L), state.transactions.map { it.amount.amountMinor })
-        assertTrue(state.transactions.all { it.profileVersion == "1" && it.pipelineVersion == "1" })
+        assertTrue(state.transactions.all { it.profileVersion == "1" && it.pipelineVersion == PipelineMetadata.VERSION })
         assertEquals(AccountKind.DEBIT_CARD, state.accounts.single().kind)
         assertEquals("4242", state.accounts.single().mask)
         assertEquals(SyntheticBankProfile.ID, state.accounts.single().institutionId)

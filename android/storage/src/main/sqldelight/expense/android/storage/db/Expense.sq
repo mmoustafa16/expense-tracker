@@ -453,41 +453,47 @@ AND NOT EXISTS (
 ORDER BY s.received_at ASC, a.id ASC
 LIMIT :limit OFFSET :offset;
 
-selectUnsupportedRetained:
-SELECT s.id AS smsId, s.body AS body, s.received_at AS receivedAt
-FROM stored_sms s
-INNER JOIN parse_attempt a ON a.sms_id = s.id
-WHERE s.body IS NOT NULL
-  AND a.status = 'UNSUPPORTED'
-  AND a.profile_id IS NULL
-  AND (
-    s.received_at > :afterReceivedAt
-    OR (s.received_at = :afterReceivedAt AND s.id > :afterSmsId)
-  )
-GROUP BY s.id, s.body, s.received_at
-ORDER BY s.received_at, s.id
-LIMIT :limit;
-
-selectOrphanRetained:
-SELECT s.id AS smsId, s.body AS body, s.received_at AS receivedAt
-FROM stored_sms s
-WHERE s.body IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM parse_attempt a
-    WHERE a.sms_id = s.id
-      AND a.status IN ('UNSUPPORTED', 'PARSED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
-  )
-  AND (
-    s.received_at > :afterReceivedAt
-    OR (s.received_at = :afterReceivedAt AND s.id > :afterSmsId)
-  )
-ORDER BY s.received_at, s.id
-LIMIT :limit;
-
 clearSmsBody:
 UPDATE stored_sms SET body = NULL WHERE id = :id;
 
-ignoreUnsupportedAttempts:
+selectStaleReview:
+SELECT a.id AS attemptId, s.id AS smsId, s.sender AS sender, s.body AS body,
+  s.received_at AS receivedAt, s.body_hash AS bodyHash,
+  s.provider_message_id AS providerMessageId
+FROM parse_attempt a
+INNER JOIN stored_sms s ON s.id = a.sms_id
+WHERE s.body IS NOT NULL
+  AND a.pipeline_version != :pipelineVersion
+  AND a.status IN ('UNSUPPORTED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+ORDER BY s.received_at, a.id
+LIMIT :limit;
+
+selectStaleOrphans:
+SELECT s.id AS smsId, s.sender AS sender, s.body AS body, s.received_at AS receivedAt,
+  s.body_hash AS bodyHash, s.provider_message_id AS providerMessageId,
+  MIN(a.id) AS attemptId
+FROM stored_sms s
+LEFT JOIN parse_attempt a ON a.sms_id = s.id
+WHERE s.body IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM parse_attempt open_attempt
+    WHERE open_attempt.sms_id = s.id
+      AND open_attempt.status IN ('UNSUPPORTED', 'PARSED', 'LOW_CONFIDENCE', 'FAILED', 'AMBIGUOUS')
+  )
+GROUP BY s.id, s.sender, s.body, s.received_at, s.body_hash, s.provider_message_id
+ORDER BY s.received_at, s.id
+LIMIT :limit;
+
+updateAttempt:
 UPDATE parse_attempt
-SET status = 'IGNORED_NOT_BANK'
-WHERE sms_id = :smsId AND status = 'UNSUPPORTED' AND profile_id IS NULL;
+SET pipeline_version = :pipelineVersion,
+    profile_id = :profileId,
+    profile_version = :profileVersion,
+    template_id = :templateId,
+    status = :status,
+    confidence = :confidence,
+    error = :error
+WHERE id = :id;
+
+deleteCandidatesForAttempt:
+DELETE FROM extraction_candidate WHERE attempt_id = :attemptId;

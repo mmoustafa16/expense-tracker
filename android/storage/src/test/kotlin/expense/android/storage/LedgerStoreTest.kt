@@ -9,6 +9,8 @@ import expense.categories.CategorySource
 import expense.categories.MatchType
 import expense.categories.NewCategory
 import expense.categories.RuleSource
+import expense.ingest.IngestPipeline
+import expense.ingest.PipelineMetadata
 import expense.ledger.Account
 import expense.ledger.Correction
 import expense.ledger.CorrectionField
@@ -28,6 +30,8 @@ import expense.merchants.MerchantAlias
 import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
+import expense.parse.BankProfile
+import expense.parse.BankRegistry
 import expense.parse.Direction
 import expense.parse.Extraction
 import expense.parse.ParseAttempt
@@ -259,7 +263,14 @@ class LedgerRepositoryTest {
                 ),
             ),
         )
-        assertEquals(4, repository.reclassifyRetained(pageSize = 1))
+        assertEquals(1, reclassify(repository, pageSize = 1, maxPages = 1))
+        val firstPage = repository.load()
+        assertEquals(null, firstPage.messages.single { it.id == "promo" }.body)
+        assertEquals(ParseStatus.IGNORED_NOT_BANK, firstPage.attempts.single { it.smsId == "promo" }.status)
+        assertEquals(PipelineMetadata.VERSION, firstPage.attempts.single { it.smsId == "promo" }.pipelineVersion)
+        assertEquals(otp, firstPage.messages.single { it.id == "otp" }.body)
+        assertEquals("1", firstPage.attempts.single { it.smsId == "otp" }.pipelineVersion)
+        assertEquals(4, reclassify(repository, pageSize = 1))
         val loaded = repository.load()
         assertEquals(null, loaded.messages.single { it.id == "promo" }.body)
         assertEquals(null, loaded.messages.single { it.id == "otp" }.body)
@@ -269,10 +280,97 @@ class LedgerRepositoryTest {
         assertEquals(parsed, loaded.messages.single { it.id == "parsed" }.body)
         assertEquals(ParseStatus.IGNORED_NOT_BANK, loaded.attempts.single { it.smsId == "promo" }.status)
         assertEquals(ParseStatus.UNSUPPORTED, loaded.attempts.single { it.smsId == "charged" }.status)
+        assertEquals(PipelineMetadata.VERSION, loaded.attempts.single { it.smsId == "charged" }.pipelineVersion)
         assertEquals(ParseStatus.PARSED, loaded.attempts.single { it.smsId == "parsed" }.status)
+        assertEquals("1", loaded.attempts.single { it.smsId == "parsed" }.pipelineVersion)
         assertEquals(1, repository.reviewWindow(0, 20).total)
         assertEquals(2, repository.storedTally().financial)
         assertEquals(1, repository.storedTally().unsupported)
+        assertEquals(0, reclassify(repository, pageSize = 1))
+        assertEquals(loaded.attempts.map { it.status }, repository.load().attempts.map { it.status })
+    }
+
+    @Test
+    fun `a stored account transfer from an unknown sender is rewritten and stays in review`() {
+        val repository = memoryRepository()
+        val body = "Your account ending with ******9438 is debited with amount EGP 31.89DR on 31 MAR 2024 with transfer to another account."
+        val received = Instant.parse("2026-05-02T00:00:00Z")
+        repository.save(
+            LedgerState(
+                messages = listOf(StoredSms("cib", "CIB", body, BodyHash.sha256(body), "cib", received)),
+                attempts = listOf(
+                    ParseAttempt(
+                        id = "a-cib",
+                        smsId = "cib",
+                        pipelineVersion = "1",
+                        profileId = null,
+                        profileVersion = null,
+                        templateId = null,
+                        status = ParseStatus.UNSUPPORTED,
+                        confidence = null,
+                        extraction = null,
+                        error = null,
+                    ),
+                ),
+            ),
+        )
+        assertEquals(1, reclassify(repository, pageSize = 1))
+        val loaded = repository.load()
+        val attempt = loaded.attempts.single()
+        assertEquals(ParseStatus.UNSUPPORTED, attempt.status)
+        assertEquals(PipelineMetadata.VERSION, attempt.pipelineVersion)
+        assertEquals(body, loaded.messages.single().body)
+        assertTrue(loaded.transactions.isEmpty())
+        assertEquals(1, repository.reviewWindow(0, 20).total)
+        assertEquals(0, reclassify(repository, pageSize = 1))
+    }
+
+    @Test
+    fun `a stored charge from a verified sender is posted by the current pipeline`() {
+        val repository = memoryRepository()
+        val body = "Charged EGP 20.00 at Shop"
+        val received = Instant.parse("2026-05-03T00:00:00Z")
+        repository.save(
+            LedgerState(
+                messages = listOf(StoredSms("shop", "VERIFIED", body, BodyHash.sha256(body), "shop", received)),
+                attempts = listOf(
+                    ParseAttempt(
+                        id = "a-shop",
+                        smsId = "shop",
+                        pipelineVersion = "1",
+                        profileId = null,
+                        profileVersion = null,
+                        templateId = null,
+                        status = ParseStatus.UNSUPPORTED,
+                        confidence = null,
+                        extraction = null,
+                        error = null,
+                    ),
+                ),
+            ),
+        )
+        val pipeline = IngestPipeline(
+            registry = BankRegistry(
+                listOf(
+                    BankProfile(
+                        id = "example.verified",
+                        version = "1",
+                        displayName = "Verified Example",
+                        senderIds = setOf("VERIFIED"),
+                        templates = emptyList(),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(1, reclassify(repository, pipeline, pageSize = 1))
+        val loaded = repository.load()
+        assertEquals(ParseStatus.PARSED, loaded.attempts.single().status)
+        assertEquals(PipelineMetadata.VERSION, loaded.attempts.single().pipelineVersion)
+        assertEquals(body, loaded.messages.single().body)
+        assertEquals(1, loaded.transactions.size)
+        assertEquals(TransactionKind.PURCHASE, loaded.transactions.single().kind)
+        assertEquals(0, repository.reviewWindow(0, 20).total)
+        assertEquals(0, reclassify(repository, pipeline, pageSize = 1))
     }
 
     @Test
@@ -709,6 +807,25 @@ private class ImmediateCipherPrompt(
     override fun authenticate(onSuccess: () -> Unit, onFailure: () -> Unit) {
         if (succeed) onSuccess() else onFailure()
     }
+}
+
+private val migratedIds = AtomicInteger()
+
+private fun reclassify(
+    repository: SqlDelightLedgerRepository,
+    pipeline: IngestPipeline = IngestPipeline(),
+    pageSize: Int,
+    maxPages: Int = Int.MAX_VALUE,
+): Int {
+    return repository.reclassifyRetained(
+        pageSize = pageSize,
+        maxPages = maxPages,
+        newAttemptId = { "migrated-${migratedIds.incrementAndGet()}" },
+        interpret = pipeline::interpretStored,
+        post = { state, message, decision ->
+            pipeline.postStored(state, message, checkNotNull(decision.profile), checkNotNull(decision.extraction))
+        },
+    )
 }
 
 private fun memoryRepository(): SqlDelightLedgerRepository {

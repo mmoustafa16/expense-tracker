@@ -1,6 +1,7 @@
 package expense.android.ui.review
 
 import expense.android.ui.common.UiResult
+import expense.ingest.PipelineMetadata
 import expense.ledger.LedgerState
 import expense.ledger.ReviewDismissals
 import expense.ledger.StoredSms
@@ -99,7 +100,7 @@ class ReviewLogicTest {
         assertNull(draft.accountKind)
         assertNull(draft.accountMask)
         assertEquals("shopping", draft.categoryId)
-        assertEquals("1", draft.pipelineVersion)
+        assertEquals(PipelineMetadata.VERSION, draft.pipelineVersion)
     }
 
     @Test

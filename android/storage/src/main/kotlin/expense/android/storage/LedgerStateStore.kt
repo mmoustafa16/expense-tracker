@@ -28,8 +28,9 @@ import expense.money.Currency
 import expense.money.Money
 import expense.parse.AccountKind
 import expense.parse.Direction
+import expense.ingest.PipelineMetadata
+import expense.ingest.StoredInterpretation
 import expense.parse.Extraction
-import expense.parse.FinancialSignal
 import expense.parse.ParseAttempt
 import expense.parse.ParseStatus
 import expense.parse.TransactionCandidate
@@ -533,58 +534,163 @@ class SqlDelightLedgerRepository(
     }
 
     /**
-     * Drops retained bodies that the current gate would ignore.
-     * Only unsupported rows with no profile, and retained copies that have no
-     * open attempt, are visited. Parsed and failed rows stay. One page of bodies
-     * is read at a time.
+     * Re-runs the current semantic pipeline on stored review rows and retained
+     * bodies that have no open attempt. One page is one database transaction.
+     * A row is stamped with [pipelineVersion] inside that transaction, so a
+     * process death retries only the uncommitted page. Posted [ParseStatus.PARSED]
+     * rows are left alone. Returns how many messages were visited.
      */
-    fun reclassifyRetained(pageSize: Int): Int {
+    fun reclassifyRetained(
+        pageSize: Int,
+        maxPages: Int = Int.MAX_VALUE,
+        pipelineVersion: String = PipelineMetadata.VERSION,
+        newAttemptId: () -> String,
+        interpret: (sender: String, body: String) -> StoredInterpretation,
+        post: (LedgerState, StoredSms, StoredInterpretation) -> LedgerState,
+    ): Int {
         require(pageSize > 0)
-        val unsupported = dropRetained(pageSize, unsupported = true)
-        val orphans = dropRetained(pageSize, unsupported = false)
-        return unsupported + orphans
+        require(maxPages > 0)
+        var pages = 0
+        var visited = 0
+        while (pages < maxPages) {
+            val review = staleReview(pipelineVersion, pageSize)
+            val orphans = if (review.size < pageSize) staleOrphans(pageSize - review.size) else emptyList()
+            val page = review + orphans
+            if (page.isEmpty()) return visited
+            val decided = page.map { row -> row to interpret(row.sender, row.body) }
+            database.transaction {
+                val needsPost = decided.any { (_, decision) -> decision.posts }
+                val before = if (needsPost) loadWorkingSet() else null
+                var working = before
+                if (before != null) {
+                    for ((row, decision) in decided) {
+                        if (!decision.posts) continue
+                        val message = checkNotNull(working).messages.first { it.id == row.smsId }
+                        working = post(checkNotNull(working), message, decision)
+                    }
+                }
+                decided.forEach { (row, decision) ->
+                    rewriteStored(row, decision, pipelineVersion, newAttemptId)
+                }
+                if (before != null && working != null) appendInside(before, working)
+            }
+            pages++
+            visited += page.size
+        }
+        return visited
     }
 
-    private fun dropRetained(pageSize: Int, unsupported: Boolean): Int {
-        val queries = database.expenseQueries
-        var dropped = 0
-        var afterReceivedAt = -1L
-        var afterSmsId = ""
-        while (true) {
-            val page = if (unsupported) {
-                queries.selectUnsupportedRetained(afterReceivedAt, afterSmsId, pageSize.toLong()).executeAsList().map {
-                    RetainedBody(it.smsId, it.body, it.receivedAt)
-                }
-            } else {
-                queries.selectOrphanRetained(afterReceivedAt, afterSmsId, pageSize.toLong()).executeAsList().map {
-                    RetainedBody(it.smsId, it.body, it.receivedAt)
-                }
-            }
-            if (page.isEmpty()) return dropped
-            val last = page.last()
-            afterReceivedAt = last.receivedAt
-            afterSmsId = last.smsId
-            database.transaction {
-                page.forEach { row ->
-                    val body = row.body ?: return@forEach
-                    if (FinancialSignal.present(body)) return@forEach
-                    queries.clearSmsBody(row.smsId)
-                    if (unsupported) queries.ignoreUnsupportedAttempts(row.smsId)
-                    dropped++
-                }
-            }
+    private fun staleReview(pipelineVersion: String, limit: Int): List<StaleSms> {
+        return database.expenseQueries.selectStaleReview(pipelineVersion, limit.toLong()).executeAsList().mapNotNull { row ->
+            val body = row.body ?: return@mapNotNull null
+            StaleSms(
+                attemptId = row.attemptId,
+                smsId = row.smsId,
+                sender = row.sender,
+                body = body,
+                receivedAt = row.receivedAt,
+                bodyHash = row.bodyHash,
+                providerMessageId = row.providerMessageId,
+            )
         }
     }
 
-    private data class RetainedBody(
+    private fun staleOrphans(limit: Int): List<StaleSms> {
+        return database.expenseQueries.selectStaleOrphans(limit.toLong()).executeAsList().mapNotNull { row ->
+            val body = row.body ?: return@mapNotNull null
+            StaleSms(
+                attemptId = row.attemptId,
+                smsId = row.smsId,
+                sender = row.sender,
+                body = body,
+                receivedAt = row.receivedAt,
+                bodyHash = row.bodyHash,
+                providerMessageId = row.providerMessageId,
+            )
+        }
+    }
+
+    private fun rewriteStored(
+        row: StaleSms,
+        decision: StoredInterpretation,
+        pipelineVersion: String,
+        newAttemptId: () -> String,
+    ) {
+        val queries = database.expenseQueries
+        val attemptId = row.attemptId ?: if (decision.retainBody || decision.extraction != null) {
+            newAttemptId()
+        } else {
+            null
+        }
+        if (attemptId == null) {
+            queries.clearSmsBody(row.smsId)
+            return
+        }
+        if (row.attemptId == null) {
+            queries.insertAttempt(
+                id = attemptId,
+                smsId = row.smsId,
+                pipelineVersion = pipelineVersion,
+                profileId = decision.profile?.id,
+                profileVersion = decision.profile?.version,
+                templateId = decision.templateId,
+                status = decision.status.name,
+                confidence = decision.extraction?.confidence?.toLong(),
+                error = decision.error,
+            )
+        } else {
+            queries.updateAttempt(
+                pipelineVersion = pipelineVersion,
+                profileId = decision.profile?.id,
+                profileVersion = decision.profile?.version,
+                templateId = decision.templateId,
+                status = decision.status.name,
+                confidence = decision.extraction?.confidence?.toLong(),
+                error = decision.error,
+                id = attemptId,
+            )
+            queries.deleteCandidatesForAttempt(attemptId)
+        }
+        if (!decision.retainBody) queries.clearSmsBody(row.smsId)
+        decision.extraction?.candidates?.forEachIndexed { index, candidate ->
+            queries.insertCandidate(
+                attemptId = attemptId,
+                position = index.toLong(),
+                kind = candidate.kind.name,
+                direction = candidate.direction.name,
+                amountMinor = candidate.amount?.amountMinor,
+                amountCurrency = candidate.amount?.currency?.code,
+                merchantRaw = candidate.merchantRaw,
+                occurredAt = candidate.occurredAt?.toString(),
+                reference = candidate.reference,
+                accountMask = candidate.accountMask,
+                accountKind = candidate.accountKind?.name,
+                balanceMinor = candidate.balance?.amountMinor,
+                balanceCurrency = candidate.balance?.currency?.code,
+                foreignMinor = candidate.foreignAmount?.amountMinor,
+                foreignCurrency = candidate.foreignAmount?.currency?.code,
+                installmentIndex = candidate.installmentIndex?.toLong(),
+                installmentCount = candidate.installmentCount?.toLong(),
+            )
+        }
+    }
+
+    private data class StaleSms(
+        val attemptId: String?,
         val smsId: String,
-        val body: String?,
+        val sender: String,
+        val body: String,
         val receivedAt: Long,
+        val bodyHash: String,
+        val providerMessageId: String?,
     )
 
     fun append(previous: LedgerState, next: LedgerState) {
+        database.transaction { appendInside(previous, next) }
+    }
+
+    private fun appendInside(previous: LedgerState, next: LedgerState) {
         val queries = database.expenseQueries
-        database.transaction {
             val previousMessageIds = previous.messages.map { it.id }.toSet()
             next.messages.filter { it.id !in previousMessageIds }.forEach { sms ->
                 queries.insertSms(
@@ -709,7 +815,6 @@ class SqlDelightLedgerRepository(
                     providerMessageId = dismissal.providerMessageId,
                 )
             }
-        }
     }
 
     fun update(transform: (LedgerState) -> LedgerState): LedgerState {

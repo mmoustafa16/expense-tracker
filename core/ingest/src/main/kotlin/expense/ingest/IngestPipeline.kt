@@ -103,6 +103,40 @@ class IngestPipeline(
         return source.messages().fold(state) { acc, sms -> ingest(sms, acc).state }
     }
 
+    /**
+     * Runs discovery, the semantic classifier, extraction, validation, and
+     * [interpret] for a body that is already stored. Does not read or write
+     * ledger rows.
+     */
+    fun interpretStored(sender: String, body: String): StoredInterpretation {
+        val sms = bounded(
+            InboundSms(
+                sender = sender,
+                body = body,
+                providerMessageId = null,
+                receivedAt = java.time.Instant.EPOCH,
+            ),
+        )
+        val decision = interpret(sms, intelligence.assess(SmsText(sms.sender, sms.body)))
+        return StoredInterpretation(
+            status = decision.status,
+            retainBody = decision.retainBody,
+            profile = decision.profile,
+            templateId = decision.templateId,
+            extraction = decision.extraction,
+            error = decision.error,
+        )
+    }
+
+    fun postStored(
+        state: LedgerState,
+        message: StoredSms,
+        profile: BankProfile,
+        extraction: Extraction,
+    ): LedgerState {
+        return poster.post(state, message, profile, extraction)
+    }
+
     fun correct(state: LedgerState, correction: Correction): LedgerState {
         return CorrectionOverlay.apply(state.copy(corrections = state.corrections + correction), ids)
     }

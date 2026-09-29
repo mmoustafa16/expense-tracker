@@ -104,6 +104,6 @@ class ExpenseTrackerApplication : Application() {
         const val SETUP_PREFS = "expense_setup"
         const val INBOX_SCANNED = "inbox_scanned"
         const val CLASSIFICATION_REVISION_KEY = "classification_revision"
-        const val CLASSIFICATION_REVISION = 1
+        const val CLASSIFICATION_REVISION = 2
     }
 }
